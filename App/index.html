@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashback - Training Recorder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #F8FAFC;
+            color: #1E293B;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: white;
+            padding: 16px 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2563EB;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .recording-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #EF4444;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            gap: 24px;
+        }
+
+        .video-container {
+            position: relative;
+            width: 800px;
+            height: 450px;
+            background-color: #1E293B;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #videoPreview {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .controls {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: #2563EB;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #1D4ED8;
+        }
+
+        .btn-danger {
+            background-color: #EF4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #DC2626;
+        }
+
+        .btn-secondary {
+            background-color: #64748B;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #475569;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Timeline Styles */
+        .timeline-container {
+            width: 800px;
+            margin: 8px auto 0 auto;
+        }
+
+        .timeline-bar-container {
+            position: relative;
+        }
+
+        .timeline-time-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #6B7280;
+            font-family: 'Courier New', monospace;
+        }
+
+        .timeline-legend {
+            margin-top: 4px;
+            text-align: center;
+        }
+
+        .timeline-legend-text {
+            font-size: 11px;
+            color: #9CA3AF;
+            font-style: italic;
+        }
+
+        .timeline-bar {
+            height: 24px;
+            background-color: #F3F4F6;
+            border-radius: 12px;
+            cursor: pointer;
+            position: relative;
+            border: 1px solid #D1D5DB;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #10B981 0%, #059669 100%);
+            border-radius: 12px;
+            transition: width 0.3s ease;
+        }
+
+        .timeline-position {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 3px;
+            background-color: #EF4444;
+            border-radius: 2px;
+            z-index: 2;
+            box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+        }
+
+        .timeline-bar:hover {
+            border-color: #9CA3AF;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+
+        /* Responsive timeline */
+        @media (max-width: 768px) {
+            .timeline-container {
+                width: 100%;
+                max-width: 400px;
+            }
+
+            .timeline-time-display {
+                font-size: 11px;
+            }
+
+            .timeline-bar {
+                height: 20px;
+                border-radius: 10px;
+            }
+
+            .timeline-progress {
+                border-radius: 10px;
+            }
+
+            .timeline-position {
+                width: 2px;
+            }
+        }
+
+        .flashback-info {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            min-width: 300px;
+        }
+
+        .counter-display {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2563EB;
+            margin-bottom: 8px;
+        }
+
+        .instructions {
+            font-size: 14px;
+            color: #64748B;
+            line-height: 1.5;
+        }
+
+        .error-message {
+            background-color: #FEF2F2;
+            color: #DC2626;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 16px 0;
+            display: none;
+        }
+
+        .success-message {
+            background-color: #F0FDF4;
+            color: #16A34A;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 16px 0;
+            display: none;
+        }
+
+        .settings-panel {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-top: 16px;
+        }
+
+        .duration-control {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .duration-control label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            white-space: nowrap;
+        }
+
+        .duration-control input[type="range"] {
+            width: 120px;
+        }
+
+        .duration-control input[type="number"] {
+            width: 80px;
+            padding: 4px 8px;
+            border: 1px solid #D1D5DB;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .duration-control span {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2563EB;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .video-container {
+                width: 100%;
+                max-width: 400px;
+                height: 225px;
+            }
+
+            .controls {
+                flex-direction: column;
+                gap: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">Flashback</div>
+        <div class="status-indicator" id="statusIndicator">
+            <div class="recording-dot" id="recordingDot" style="display: none;"></div>
+            <span id="statusText">Ready</span>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Video Preview -->
+        <div class="video-container">
+            <video id="videoPreview" autoplay muted playsinline></video>
+            <div class="video-overlay" id="videoOverlay">LIVE</div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="btn btn-primary" id="startBtn">Start Recording</button>
+            <button class="btn btn-danger" id="stopBtn" disabled>Stop</button>
+            <button class="btn btn-secondary" id="flashbackBtn" disabled>Flashback ←</button>
+            <button class="btn btn-secondary" id="forwardBtn" disabled>Forward →</button>
+        </div>
+
+        <!-- Flashback Info -->
+        <div class="flashback-info" id="flashbackInfo" style="display: none;">
+            <div class="counter-display" id="counterDisplay">Back presses: 0</div>
+            <div class="instructions">Press ← to go back in time • Press → to advance</div>
+        </div>
+
+        <!-- Messages -->
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+
+        <!-- Timeline -->
+        <div class="timeline-container" id="timelineContainer" style="display: none;">
+            <div class="timeline-bar-container">
+                <div class="timeline-bar" id="timelineBar">
+                    <div class="timeline-progress" id="timelineProgress"></div>
+                    <div class="timeline-position" id="timelinePosition" style="display: none;"></div>
+                </div>
+            </div>
+            <div class="timeline-time-display">
+                <span id="timeStart">0:00</span>
+                <span id="timeCurrent">0:00</span>
+                <span id="timeEnd">0:00</span>
+            </div>
+            <div class="timeline-legend">
+                <span class="timeline-legend-text" id="timelineLegend">Click to jump to any moment</span>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel">
+            <div class="duration-control">
+                <label for="durationRange">Max Duration:</label>
+                <input type="range" id="durationRange" min="5" max="120" value="20">
+                <input type="number" id="durationValue" min="5" max="120" value="20">
+                <span id="durationDisplay">20s</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class FlashbackRecorder {
+            constructor() {
+                // DOM Elements
+                this.videoPreview = document.getElementById('videoPreview');
+                this.startBtn = document.getElementById('startBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.flashbackBtn = document.getElementById('flashbackBtn');
+                this.forwardBtn = document.getElementById('forwardBtn');
+                this.statusText = document.getElementById('statusText');
+                this.recordingDot = document.getElementById('recordingDot');
+                this.videoOverlay = document.getElementById('videoOverlay');
+                this.flashbackInfo = document.getElementById('flashbackInfo');
+                this.counterDisplay = document.getElementById('counterDisplay');
+                this.errorMessage = document.getElementById('errorMessage');
+                this.successMessage = document.getElementById('successMessage');
+                this.timelineContainer = document.getElementById('timelineContainer');
+                this.timelineBar = document.getElementById('timelineBar');
+                this.timelineProgress = document.getElementById('timelineProgress');
+                this.timelinePosition = document.getElementById('timelinePosition');
+                this.timeStart = document.getElementById('timeStart');
+                this.timeCurrent = document.getElementById('timeCurrent');
+                this.timeEnd = document.getElementById('timeEnd');
+                this.timelineLegend = document.getElementById('timelineLegend');
+                this.durationRange = document.getElementById('durationRange');
+                this.durationValue = document.getElementById('durationValue');
+                this.durationDisplay = document.getElementById('durationDisplay');
+
+                // State
+                this.stream = null;
+                this.mediaRecorder = null;
+                this.isRecording = false;
+                this.isPlaying = false;
+                this.recordedSessions = [];
+                this.currentSessionChunks = [];
+                this.currentPlaybackIndex = 0;
+                this.playbackVideo = null;
+                this.allSessions = [];
+                this.currentReferencePosition = null;
+                this.backPressCount = 0;
+                this.forwardPressCount = 0;
+                this.backResetTimer = null;
+                this.forwardResetTimer = null;
+                this.recordingStartTime = 0;
+                this.totalRecordedTime = 0;
+                this.maxDuration = 20; // seconds
+                this.sessionBoundaries = [];
+
+                // Bind methods
+                this.handleBackKey = this.handleBackKey.bind(this);
+                this.handleForwardKey = this.handleForwardKey.bind(this);
+                this.handleEscapeKey = this.handleEscapeKey.bind(this);
+                this.handleTimelineClick = this.handleTimelineClick.bind(this);
+
+                // Initialize
+                this.loadSettings();
+                this.initEventListeners();
+                this.updateDurationDisplay();
+                this.startRecording(); // Auto-start as per US-001
+            }
+
+            initEventListeners() {
+                this.startBtn.addEventListener('click', () => this.startRecording());
+                this.stopBtn.addEventListener('click', () => this.stopRecording());
+                this.flashbackBtn.addEventListener('click', () => this.handleFlashback());
+                this.forwardBtn.addEventListener('click', () => this.handleForward());
+
+                this.durationRange.addEventListener('input', () => this.updateDurationFromRange());
+                this.durationValue.addEventListener('change', () => this.updateDurationFromInput());
+
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowLeft') this.handleBackKey();
+                    if (e.key === 'ArrowRight') this.handleForwardKey();
+                    if (e.key === 'Escape') this.handleEscapeKey();
+                });
+
+                this.timelineBar.addEventListener('click', (e) => this.handleTimelineClick(e));
+            }
+
+            loadSettings() {
+                const saved = localStorage.getItem('flashbackMaxDuration');
+                if (saved) {
+                    this.maxDuration = parseInt(saved, 10);
+                    this.durationRange.value = this.maxDuration;
+                    this.durationValue.value = this.maxDuration;
+                }
+            }
+
+            saveSettings() {
+                localStorage.setItem('flashbackMaxDuration', this.maxDuration.toString());
+            }
+
+            updateDurationFromRange() {
+                this.maxDuration = parseInt(this.durationRange.value, 10);
+                this.durationValue.value = this.maxDuration;
+                this.updateDurationDisplay();
+                this.saveSettings();
+                this.enforceRollingBuffer();
+            }
+
+            updateDurationFromInput() {
+                let val = parseInt(this.durationValue.value, 10);
+                if (isNaN(val) || val < 5) val = 5;
+                if (val > 120) val = 120;
+                this.maxDuration = val;
+                this.durationRange.value = val;
+                this.durationValue.value = val;
+                this.updateDurationDisplay();
+                this.saveSettings();
+                this.enforceRollingBuffer();
+            }
+
+            updateDurationDisplay() {
+                this.durationDisplay.textContent = `${this.maxDuration}s`;
+            }
+
+            async startRecording() {
+                try {
+                    this.stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    this.videoPreview.srcObject = this.stream;
+                    this.videoOverlay.textContent = 'LIVE';
+                    this.videoOverlay.style.display = 'block';
+
+                    const options = { mimeType: 'video/webm;codecs=vp9,opus' };
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        console.warn('VP9 not supported, falling back to VP8');
+                        options.mimeType = 'video/webm;codecs=vp8,opus';
+                    }
+
+                    this.mediaRecorder = new MediaRecorder(this.stream, options);
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.currentSessionChunks.push(event.data);
+                        }
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        console.log('MediaRecorder stopped');
+                    };
+
+                    // Start recording with 1-second chunks
+                    this.mediaRecorder.start(1000);
+                    this.isRecording = true;
+                    this.recordingStartTime = Date.now();
+
+                    this.updateUIForRecording();
+                    this.startTimer();
+                    this.showMessage('Recording started', 'success');
+                } catch (err) {
+                    console.error('Error accessing media devices:', err);
+                    this.showMessage('Camera/microphone access denied or unavailable', 'error');
+                }
+            }
+
+            stopRecording() {
+                if (this.mediaRecorder && this.isRecording) {
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    this.stopTimer();
+                    this.saveCurrentSession();
+                    this.updateUIForStopped();
+                }
+            }
+
+            resumeRecording() {
+                if (!this.isRecording && this.stream) {
+                    this.startRecording();
+                }
+            }
+
+            handleFlashback() {
+                const flashbackDuration = Math.pow(2, this.backPressCount);
+                this.startFlashbackPlayback(flashbackDuration);
+                this.incrementBackCounter();
+            }
+
+            handleForward() {
+                if (!this.isPlaying) return;
+                const forwardDuration = Math.pow(2, this.forwardPressCount);
+                this.advancePlayback(forwardDuration);
+                this.incrementForwardCounter();
+            }
+
+            handleBackKey() {
+                if (this.isPlaying) {
+                    this.handleFlashback();
+                } else if (this.isRecording) {
+                    this.handleFlashback();
+                }
+            }
+
+            handleForwardKey() {
+                this.handleForward();
+            }
+
+            handleEscapeKey() {
+                if (this.isPlaying) {
+                    this.stopPlaybackAndResumeRecording();
+                }
+            }
+
+            incrementBackCounter() {
+                this.backPressCount++;
+                this.updateCounterDisplay();
+                clearTimeout(this.backResetTimer);
+                this.backResetTimer = setTimeout(() => {
+                    this.backPressCount = 0;
+                    this.updateCounterDisplay();
+                }, 3000);
+            }
+
+            incrementForwardCounter() {
+                this.forwardPressCount++;
+                clearTimeout(this.forwardResetTimer);
+                this.forwardResetTimer = setTimeout(() => {
+                    this.forwardPressCount = 0;
+                }, 3000);
+            }
+
+            updateCounterDisplay() {
+                const duration = Math.pow(2, this.backPressCount);
+                this.counterDisplay.textContent = `← ${this.backPressCount} press${this.backPressCount !== 1 ? 'es' : ''} = ${duration}s back`;
+            }
+
+            startTimer() {
+                this.timerInterval = setInterval(() => {
+                    this.updateTimeline();
+                }, 100);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+            }
+
+            updateUIForRecording() {
+                this.startBtn.disabled = true;
+                this.stopBtn.disabled = false;
+                this.flashbackBtn.disabled = false;
+                this.forwardBtn.disabled = true;
+                this.recordingDot.style.display = 'block';
+                this.statusText.textContent = 'REC';
+                this.flashbackInfo.style.display = 'none';
+                this.timelineContainer.style.display = 'block';
+                this.timelineLegend.textContent = 'Recording in progress...';
+            }
+
+            updateUIForPlayback() {
+                this.startBtn.disabled = true;
+                this.stopBtn.disabled = true;
+                this.flashbackBtn.disabled = false;
+                this.forwardBtn.disabled = false;
+                this.recordingDot.style.display = 'none';
+                this.statusText.textContent = 'PLAYBACK';
+                this.videoOverlay.style.display = 'none';
+                this.flashbackInfo.style.display = 'block';
+                this.backPressCount = 0;
+                this.forwardPressCount = 0;
+                this.updateCounterDisplay();
+                this.timelinePosition.style.display = 'block';
+                this.timelineLegend.textContent = 'Click timeline to jump • ←/→ to navigate';
+            }
+
+            updateUIForStopped() {
+                this.startBtn.disabled = false;
+                this.stopBtn.disabled = true;
+                this.flashbackBtn.disabled = true;
+                this.forwardBtn.disabled = true;
+                this.recordingDot.style.display = 'none';
+                this.statusText.textContent = 'Stopped';
+                this.flashbackInfo.style.display = 'none';
+                this.timelineContainer.style.display = 'none';
+            }
+
+            saveCurrentSession() {
+                if (this.currentSessionChunks.length === 0) return;
+
+                const blob = new Blob(this.currentSessionChunks, { type: 'video/webm' });
+                const estimatedDuration = this.currentSessionChunks.length; // 1 chunk = 1 second
+
+                const session = {
+                    blob,
+                    chunkCount: this.currentSessionChunks.length,
+                    estimatedDuration,
+                    startTime: this.totalRecordedTime,
+                    endTime: this.totalRecordedTime + estimatedDuration
+                };
+
+                this.recordedSessions.push(session);
+                this.totalRecordedTime += estimatedDuration;
+                this.sessionBoundaries.push(this.totalRecordedTime);
+                this.currentSessionChunks = [];
+
+                this.enforceRollingBuffer();
+                this.updateTimeline();
+            }
+
+            enforceRollingBuffer() {
+                while (this.totalRecordedTime > this.maxDuration && this.recordedSessions.length > 0) {
+                    const removed = this.recordedSessions.shift();
+                    this.totalRecordedTime -= removed.estimatedDuration;
+                    this.sessionBoundaries.shift();
+                    // Adjust start times of remaining sessions
+                    this.recordedSessions.forEach(s => {
+                        s.startTime -= removed.estimatedDuration;
+                        s.endTime -= removed.estimatedDuration;
+                    });
+                    // Adjust total boundaries
+                    for (let i = 0; i < this.sessionBoundaries.length; i++) {
+                        this.sessionBoundaries[i] -= removed.estimatedDuration;
+                    }
+                    URL.revokeObjectURL(removed.blobUrl);
+                }
+            }
+
+            showMessage(text, type) {
+                const msgEl = type === 'error' ? this.errorMessage : this.successMessage;
+                const hideEl = type === 'error' ? this.successMessage : this.errorMessage;
+                hideEl.style.display = 'none';
+                msgEl.textContent = text;
+                msgEl.style.display = 'block';
+                setTimeout(() => {
+                    msgEl.style.display = 'none';
+                }, 3000);
+            }
+
+            formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            updateTimeline() {
+                if (!this.isRecording && !this.isPlaying) return;
+
+                let totalDuration = this.totalRecordedTime;
+                let currentTime = 0;
+                let progressPercent = 0;
+
+                if (this.isRecording && this.currentSessionChunks.length > 0) {
+                    currentTime = this.totalRecordedTime + this.currentSessionChunks.length;
+                    totalDuration = Math.max(totalDuration, currentTime);
+                    progressPercent = (this.recordedSessions.reduce((sum, s) => sum + s.chunkCount, 0) + this.currentSessionChunks.length) / this.maxDuration * 100;
+                } else if (this.isPlaying) {
+                    // Calculate from playback
+                    for (let i = 0; i < this.currentPlaybackIndex; i++) {
+                        currentTime += this.allSessions[i].estimatedDuration;
+                    }
+                    if (this.playbackVideo) {
+                        currentTime += this.playbackVideo.currentTime;
+                    }
+                    totalDuration = this.allSessions.reduce((sum, s) => sum + s.estimatedDuration, 0);
+                    progressPercent = totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0;
+                } else {
+                    progressPercent = totalDuration > 0 ? (totalDuration / this.maxDuration) * 100 : 0;
+                }
+
+                this.timelineProgress.style.width = `${Math.min(progressPercent, 100)}%`;
+                this.timeStart.textContent = '0:00';
+                this.timeCurrent.textContent = this.formatTime(currentTime);
+                this.timeEnd.textContent = this.formatTime(this.maxDuration);
+
+                if (this.isPlaying && this.playbackVideo) {
+                    const session = this.allSessions[this.currentPlaybackIndex];
+                    const sessionProgress = (this.playbackVideo.currentTime / session.estimatedDuration) * 100;
+                    const totalProgress = (currentTime / this.allSessions.reduce((s, acc) => acc + s.estimatedDuration, 0)) * 100;
+                    this.timelinePosition.style.left = `${totalProgress}%`;
+                }
+            }
+
+            handleTimelineClick(e) {
+                const rect = this.timelineBar.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const percent = x / rect.width;
+                const totalDuration = this.allSessions.reduce((sum, s) => sum + s.estimatedDuration, 0);
+                const targetTime = percent * totalDuration;
+
+                if (this.isRecording) {
+                    this.startFlashbackPlayback(totalDuration - targetTime);
+                } else if (this.isPlaying) {
+                    this.playSessionsFromTimestamp(this.allSessions, targetTime);
+                }
+            }
+
+            startFlashbackPlayback(flashbackDuration) {
+                console.log(`=== STARTING FLASHBACK PLAYBACK ===`);
+                console.log(`Input: flashbackDuration=${flashbackDuration}s`);
+
+                // Step 1: Verify we have recording data to play back
+                if (this.recordedSessions.length === 0 && this.currentSessionChunks.length === 0) {
+                    console.log(`ERROR: No recording data available`);
+                    this.showMessage('No recording data available for playback', 'error');
+                    return;
+                }
+
+                // Step 2: Stop any current recording and SAVE SESSION
+                if (this.isRecording) {
+                    console.log(`Stopping current recording, chunks: ${this.currentSessionChunks.length}`);
+
+                    // Save current session before stopping
+                    if (this.currentSessionChunks.length > 0) {
+                        try {
+                            const blob = new Blob(this.currentSessionChunks, { type: 'video/webm' });
+                            const session = {
+                                blob,
+                                chunkCount: this.currentSessionChunks.length,
+                                estimatedDuration: this.currentSessionChunks.length
+                            };
+                            this.recordedSessions.push(session);
+                            console.log(`Saved current session with ${this.currentSessionChunks.length} chunks`);
+                        } catch (error) {
+                            console.error('Error creating blob URL:', error);
+                            console.warn('Skipping session save due to blob URL creation failure');
+                        }
+
+                        this.currentSessionChunks = [];
+                        console.log(`Cleared currentSessionChunks, now empty`);
+                    } else {
+                        console.log(`No chunks to save in current session`);
+                    }
+
+                    console.log(`Calling mediaRecorder.stop()`);
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    this.stopTimer();
+                    console.log(`Recording stopped`);
+                } else {
+                    console.log(`Not currently recording, skipping stop`);
+                }
+
+                // Step 3: Prepare all sessions for sequential playback
+                const allSessions = [...this.recordedSessions];
+                console.log(`allSessions created with ${allSessions.length} sessions`);
+
+                if (allSessions.length === 0) {
+                    this.showMessage('No recording data available for playback', 'error');
+                    return;
+                }
+
+                // Step 4: Calculate reference position
+                let totalDuration = 0;
+                allSessions.forEach(session => totalDuration += session.estimatedDuration);
+                console.log(`Total estimated duration: ${totalDuration}s`);
+
+                const referencePosition = this.currentReferencePosition !== null ? this.currentReferencePosition : totalDuration;
+                console.log(`Using reference position: ${referencePosition}s`);
+
+                if (referencePosition < flashbackDuration) {
+                    console.log(`Not enough data, playing from start`);
+                    this.showMessage(`Playing from beginning`, 'success');
+                    this.playSessionsFromStart(allSessions);
+                    return;
+                }
+
+                // Step 5: Calculate start timestamp
+                const startTimestamp = Math.max(0, referencePosition - flashbackDuration);
+                console.log(`Starting playback at ${startTimestamp}s`);
+
+                // Step 6: Update reference
+                this.currentReferencePosition = startTimestamp;
+
+                // Step 7: Play from timestamp
+                this.playSessionsFromTimestamp(allSessions, startTimestamp);
+            }
+
+            playSessionsFromStart(sessions) {
+                this.allSessions = sessions;
+                this.currentPlaybackIndex = 0;
+                this.currentReferencePosition = 0;
+                this.playCurrentSession(0);
+            }
+
+            playSessionsFromTimestamp(sessions, timestamp) {
+                this.allSessions = sessions;
+                let accumulated = 0;
+                for (let i = 0; i < sessions.length; i++) {
+                    const sessionEnd = accumulated + sessions[i].estimatedDuration;
+                    if (timestamp < sessionEnd) {
+                        this.currentPlaybackIndex = i;
+                        const seekTime = timestamp - accumulated;
+                        this.playCurrentSession(seekTime);
+                        return;
+                    }
+                    accumulated = sessionEnd;
+                }
+                // If beyond last session, play last one
+                this.currentPlaybackIndex = sessions.length - 1;
+                this.playCurrentSession(0);
+            }
+
+            playCurrentSession(seekTime = 0) {
+                if (this.currentPlaybackIndex >= this.allSessions.length) {
+                    this.resumeRecordingAfterPlayback();
+                    return;
+                }
+
+                const session = this.allSessions[this.currentPlaybackIndex];
+                if (!session.blobUrl) {
+                    session.blobUrl = URL.createObjectURL(session.blob);
+                }
+
+                if (this.playbackVideo) {
+                    this.playbackVideo.pause();
+                    this.playbackVideo.removeEventListener('ended', this.onSessionEnded);
+                    this.videoPreview.srcObject = null;
+                }
+
+                this.playbackVideo = this.videoPreview;
+                this.playbackVideo.src = session.blobUrl;
+                this.playbackVideo.currentTime = seekTime;
+                this.playbackVideo.muted = false;
+
+                this.isPlaying = true;
+                this.updateUIForPlayback();
+                this.startTimer();
+
+                this.playbackVideo.play().catch(err => {
+                    console.error('Playback error:', err);
+                    this.showMessage('Playback failed', 'error');
+                });
+
+                this.playbackVideo.addEventListener('ended', () => this.onSessionEnded(), { once: true });
+                this.playbackVideo.addEventListener('timeupdate', () => this.updateTimeline());
+            }
+
+            onSessionEnded() {
+                this.currentPlaybackIndex++;
+                if (this.currentPlaybackIndex >= this.allSessions.length) {
+                    this.resumeRecordingAfterPlayback();
+                } else {
+                    this.playCurrentSession(0);
+                }
+            }
+
+            advancePlayback(forwardDuration) {
+                if (!this.playbackVideo || !this.isPlaying) {
+                    console.error('No active playback to advance');
+                    return;
+                }
+
+                let currentTotalTime = 0;
+                for (let i = 0; i < this.currentPlaybackIndex; i++) {
+                    currentTotalTime += this.allSessions[i].estimatedDuration;
+                }
+                currentTotalTime += this.playbackVideo.currentTime;
+
+                const newTotalTime = currentTotalTime + forwardDuration;
+                let totalDuration = this.allSessions.reduce((s, acc) => acc + s.estimatedDuration, 0);
+
+                if (newTotalTime >= totalDuration) {
+                    console.log(`Advanced beyond end - resuming recording`);
+                    this.showMessage('End of recording reached - resuming live recording', 'success');
+                    this.resumeRecordingAfterPlayback();
+                    return;
+                }
+
+                this.currentReferencePosition = newTotalTime;
+                this.playSessionsFromTimestamp(this.allSessions, newTotalTime);
+            }
+
+            stopPlaybackAndResumeRecording() {
+                if (this.isPlaying) {
+                    this.isPlaying = false;
+                    this.currentPlaybackIndex = 0;
+                    this.currentReferencePosition = null;
+                    if (this.playbackVideo) {
+                        this.playbackVideo.pause();
+                        this.playbackVideo.src = '';
+                        this.playbackVideo.srcObject = null;
+                    }
+                    this.allSessions.forEach(s => {
+                        if (s.blobUrl) URL.revokeObjectURL(s.blobUrl);
+                    });
+                    this.allSessions = [];
+                    this.stopTimer();
+                    this.resumeRecording();
+                }
+            }
+
+            resumeRecordingAfterPlayback() {
+                this.stopPlaybackAndResumeRecording();
+            }
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', () => {
+            new FlashbackRecorder();
+        });
+    </script>
+</body>
+</html>

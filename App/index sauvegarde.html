@@ -1,0 +1,2041 @@
+ <!DOCTYPE html>
+  <html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashback - Training Recorder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #F8FAFC;
+            color: #1E293B;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: white;
+            padding: 16px 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2563EB;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .recording-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #EF4444;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            gap: 24px;
+        }
+
+        .video-container {
+            position: relative;
+            width: 800px;
+            height: 450px;
+            background-color: #1E293B;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #videoPreview {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .controls {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: #2563EB;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #1D4ED8;
+        }
+
+        .btn-danger {
+            background-color: #EF4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #DC2626;
+        }
+
+        .btn-secondary {
+            background-color: #64748B;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #475569;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Timeline Styles */
+        .timeline-container {
+            width: 800px;
+            margin: 8px auto 0 auto;
+        }
+
+        .timeline-bar-container {
+            position: relative;
+        }
+
+        .timeline-time-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #6B7280;
+            font-family: 'Courier New', monospace;
+        }
+
+        .timeline-legend {
+            margin-top: 4px;
+            text-align: center;
+        }
+
+        .timeline-legend-text {
+            font-size: 11px;
+            color: #9CA3AF;
+            font-style: italic;
+        }
+
+        .timeline-bar {
+            height: 24px;
+            background-color: #F3F4F6;
+            border-radius: 12px;
+            cursor: pointer;
+            position: relative;
+            border: 1px solid #D1D5DB;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #10B981 0%, #059669 100%);
+            border-radius: 12px;
+            transition: width 0.3s ease;
+        }
+
+        .timeline-position {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 3px;
+            background-color: #EF4444;
+            border-radius: 2px;
+            z-index: 2;
+            box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+        }
+
+
+        .timeline-bar:hover {
+            border-color: #9CA3AF;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+
+        /* Responsive timeline */
+        @media (max-width: 768px) {
+            .timeline-container {
+                width: 100%;
+                max-width: 400px;
+            }
+
+            .timeline-time-display {
+                font-size: 11px;
+            }
+
+            .timeline-bar {
+                height: 20px;
+                border-radius: 10px;
+            }
+
+            .timeline-progress {
+                border-radius: 10px;
+            }
+
+            .timeline-position {
+                width: 2px;
+            }
+        }
+
+        .flashback-info {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            min-width: 300px;
+        }
+
+        .counter-display {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2563EB;
+            margin-bottom: 8px;
+        }
+
+        .instructions {
+            font-size: 14px;
+            color: #64748B;
+            line-height: 1.5;
+        }
+
+        .error-message {
+            background-color: #FEF2F2;
+            color: #DC2626;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 16px 0;
+            display: none;
+        }
+
+        .success-message {
+            background-color: #F0FDF4;
+            color: #16A34A;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 16px 0;
+            display: none;
+        }
+
+        .settings-panel {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-top: 16px;
+        }
+
+        .duration-control {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .duration-control label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            white-space: nowrap;
+        }
+
+        .duration-control input[type="range"] {
+            width: 120px;
+        }
+
+        .duration-control input[type="number"] {
+            width: 80px;
+            padding: 4px 8px;
+            border: 1px solid #D1D5DB;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .duration-control span {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2563EB;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .video-container {
+                width: 100%;
+                max-width: 400px;
+                height: 225px;
+            }
+
+            .controls {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .duration-control {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+
+            .duration-control input[type="range"] {
+                width: 100px;
+            }
+
+            .duration-control input[type="number"] {
+                width: 60px;
+            }
+
+            .duration-control span {
+                min-width: auto;
+                text-align: left;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">🎬 Flashback Recorder</div>
+        <div class="status-indicator">
+            <div class="recording-dot" id="recordingDot" style="display: none;"></div>
+            <span id="statusText">Ready to record</span>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="video-container">
+            <video id="videoPreview" autoplay muted></video>
+            <div class="video-overlay" id="videoOverlay" style="display: none;">
+                <span id="recordingTimer">00:00:00</span>
+            </div>
+        </div>
+
+        <!-- Timeline Bar Component -->
+        <div class="timeline-container" id="timelineContainer" style="display: none;">
+            <div class="timeline-bar-container">
+                <div class="timeline-bar" id="timelineBar">
+                    <div class="timeline-progress" id="timelineProgress"></div>
+                    <div class="timeline-position" id="timelinePosition" style="display: none;"></div>
+                </div>
+                <div class="timeline-time-display">
+                    <span id="timelineStartTime">0:00</span>
+                    <span id="timelineCurrentTime">--:--</span>
+                    <span id="timelineEndTime">--:--</span>
+                </div>
+                <div class="timeline-legend">
+                    <span class="timeline-legend-text" id="timelineLegendText">Click timeline to jump to any moment</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" class="btn btn-primary">
+                🎥 Start Recording
+            </button>
+            <button id="backBtn" class="btn btn-secondary" disabled>
+                ⬅️ Back
+            </button>
+            <button id="forwardBtn" class="btn btn-secondary" disabled>
+                ➡️ Forward
+            </button>
+            <button id="stopBtn" class="btn btn-danger" style="display: none;">
+                ⏹️ Stop Flashback
+            </button>
+        </div>
+
+
+        <div id="errorMessage" class="error-message"></div>
+        <div id="successMessage" class="success-message"></div>
+    </div>
+
+    <script>
+        class FlashbackRecorder {
+            constructor() {
+                this.mediaRecorder = null;
+                this.recordedSessions = []; // Array of complete session recordings
+                this.currentSessionChunks = []; // Chunks for current recording session
+                this.mediaStream = null;
+                this.isRecording = false;
+                this.isPlaying = false;
+                this.backPressCount = 0;
+                this.forwardPressCount = 0;
+                this.recordingStartTime = null;
+                this.timerInterval = null;
+                this.counterResetTimer = null;
+                this.forwardResetTimer = null;
+                this.playbackVideo = null;
+                this.allSessions = null; // Current sessions being played back
+                this.currentPlaybackIndex = -1; // Current session being played in sequential playback
+                this.currentReferencePosition = null; // Current position from which flashbacks are calculated (null = end of all recordings)
+
+                // Rolling buffer properties
+                this.maxRecordingDuration = 60; // Will be adjusted dynamically based on device (default 60s)
+                this.availableRecordedSeconds = 0; // Currently available recorded content (decreases with rolling buffer)
+                this.totalEverRecordedSeconds = 0; // Total recording time ever (never decreases)
+                this.isRollingBufferActive = false; // Flag for rolling buffer mode
+                this.sessionMaxDuration = 30; // Will be adjusted dynamically based on device (default fallback)
+                this.currentSessionDuration = 0; // Duration counter for current session
+                
+                this.initializeElements();
+                this.loadSettings();
+                this.initializeRecordingLimits(); // Dynamic adaptation based on device
+                this.setupEventListeners();
+                this.setupKeyboardListeners();
+            }
+
+            initializeElements() {
+                this.videoPreview = document.getElementById('videoPreview');
+                this.videoContainer = document.querySelector('.video-container');
+                this.startBtn = document.getElementById('startBtn');
+                this.backBtn = document.getElementById('backBtn');
+                this.forwardBtn = document.getElementById('forwardBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.statusText = document.getElementById('statusText');
+                this.recordingDot = document.getElementById('recordingDot');
+                this.videoOverlay = document.getElementById('videoOverlay');
+                this.recordingTimer = document.getElementById('recordingTimer');
+                this.pressCount = document.getElementById('pressCount'); // May be null if counter display is removed
+                this.forwardCount = document.getElementById('forwardCount'); // May be null if counter display is removed
+                // Duration controls removed for cleaner interface
+                this.errorMessage = document.getElementById('errorMessage');
+                this.successMessage = document.getElementById('successMessage');
+
+                // Timeline elements
+                this.timelineContainer = document.getElementById('timelineContainer');
+                this.timelineBar = document.getElementById('timelineBar');
+                this.timelineProgress = document.getElementById('timelineProgress');
+                this.timelinePosition = document.getElementById('timelinePosition');
+                this.timelineStartTime = document.getElementById('timelineStartTime');
+                this.timelineCurrentTime = document.getElementById('timelineCurrentTime');
+                this.timelineEndTime = document.getElementById('timelineEndTime');
+                this.timelineLegendText = document.getElementById('timelineLegendText');
+            }
+
+            setupEventListeners() {
+                this.startBtn.addEventListener('click', () => this.startRecording());
+                this.backBtn.addEventListener('click', () => this.handleBackPress());
+                this.forwardBtn.addEventListener('click', () => this.handleForwardPress());
+                this.stopBtn.addEventListener('click', () => this.handleStopFlashback());
+
+                // Timeline event listeners
+                this.timelineBar.addEventListener('click', (event) => this.handleTimelineClick(event));
+            }
+
+            setupKeyboardListeners() {
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'ArrowLeft') {
+                        event.preventDefault();
+                        this.handleBackPress();
+                    } else if (event.key === 'ArrowRight') {
+                        event.preventDefault();
+                        this.handleForwardPress();
+                    } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        this.handleStopFlashback();
+                    }
+                });
+            }
+
+            async startRecording() {
+                try {
+                    this.showMessage('Requesting camera and microphone access...', 'success');
+                    
+                    // Use 360p for better compression and longer recording times
+                    this.mediaStream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: 640, height: 360 },
+                        audio: true
+                    });
+
+                    this.videoPreview.srcObject = this.mediaStream;
+                    
+                    // Try different codec options for better compression and compatibility
+                    let mimeType = 'video/webm';
+                    // Prefer VP9 for better compression (smaller file sizes)
+                    if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+                        mimeType = 'video/webm;codecs=vp9,opus';
+                        console.log('Using VP9 codec for better compression');
+                    } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+                        mimeType = 'video/webm;codecs=vp8,opus';
+                        console.log('Using VP8 codec');
+                    } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) {
+                        mimeType = 'video/webm;codecs=vp8';
+                    } else if (MediaRecorder.isTypeSupported('video/webm')) {
+                        mimeType = 'video/webm';
+                    } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+                        mimeType = 'video/mp4';
+                    }
+                    
+                    this.mediaRecorder = new MediaRecorder(this.mediaStream, {
+                        mimeType: mimeType
+                    });
+
+                    // Step 1: Initialize empty array for current recording session
+                    // This will hold chunks until recording stops (when flashback starts)
+                    this.currentSessionChunks = [];
+
+                    // Step 2: Set up chunk collection handler
+                    // MediaRecorder sends data in chunks (every 1000ms = 1 second)
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            // Add this chunk to current session
+                            this.currentSessionChunks.push(event.data);
+
+                            // Increment total recorded seconds counters (only during recording)
+                            this.availableRecordedSeconds++;
+                            this.currentSessionDuration++; // Track current session duration
+                            if (!this.isPlaying) {
+                                this.totalEverRecordedSeconds++; // Never decreases, tracks total recording time ever
+                            }
+                            this.updateDurationDisplay();
+
+                            // Update timeline in real-time during recording
+                            this.updateTimeline();
+
+                            // Create new session automatically every 5 minutes (300 seconds)
+                            if (this.currentSessionDuration >= this.sessionMaxDuration) {
+                                this.createAutomaticSession();
+                            }
+
+                            // Update back button state if it should be enabled now
+                            if (this.backBtn.disabled && (this.recordedSessions.length > 0 || this.currentSessionChunks.length > 0)) {
+                                this.backBtn.disabled = false;
+                            }
+
+                            // Check if rolling buffer should be activated (only during recording, not during playback)
+                            if (this.availableRecordedSeconds >= this.maxRecordingDuration && !this.isRollingBufferActive && !this.isPlaying) {
+                                this.isRollingBufferActive = true;
+                                console.log(`Rolling buffer activated: ${this.availableRecordedSeconds}s >= ${this.maxRecordingDuration}s max`);
+                                this.showMessage('Rolling buffer activated - oldest recordings will be removed', 'success');
+                            }
+
+                            // If rolling buffer is active, cleanup oldest second (only during recording)
+                            if (this.isRollingBufferActive && !this.isPlaying) {
+                                this.cleanupOldestSecond();
+                            }
+
+                            // Debug: Track chunk accumulation
+                            console.log(`Chunk added: session chunks: ${this.currentSessionChunks.length}, total seconds: ${this.totalRecordedSeconds}`);
+                        }
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        this.handleRecordingStop();
+                    };
+
+                    this.mediaRecorder.start(1000);
+                    this.isRecording = true;
+                    this.recordingStartTime = Date.now();
+                    
+                    this.updateUI('recording');
+                    this.startTimer();
+                    this.showMessage('Recording started! Press Back button to flashback.', 'success');
+                    
+                } catch (error) {
+                    console.error('Error starting recording:', error);
+                    this.showMessage('Error accessing camera/microphone: ' + error.message, 'error');
+                }
+            }
+
+            handleBackPress() {
+                // Step 1: Check if there's any recording data available
+                // Either currently recording, playing back, or have saved sessions
+                if (!this.isRecording && !this.isPlaying && this.recordedSessions.length === 0 && this.currentSessionChunks.length === 0) {
+                    this.showMessage('Start recording first!', 'error');
+                    return;
+                }
+
+                // Step 2: Reset forward counter when switching to back direction
+                // This ensures independent counters for each direction
+                this.forwardPressCount = 0;
+                this.updateForwardCount();
+
+                // Step 3: Increment the back button press counter
+                // This tracks how many times back was pressed in sequence
+                this.backPressCount++;
+                this.updatePressCount();
+
+                // Step 4: Calculate flashback duration using exponential formula
+                // First press: 2^(1-1) = 2^0 = 1 second
+                // Second press: 2^(2-1) = 2^1 = 2 seconds
+                // Third press: 2^(3-1) = 2^2 = 4 seconds
+                // And so on...
+                const flashbackDuration = Math.pow(2, this.backPressCount - 1);
+
+                this.showMessage(`Flashback: ${flashbackDuration}s back (${this.backPressCount} presses)`, 'success');
+
+                // Step 5: Reset the 3-second timer that clears the counter
+                // This prevents the counter from resetting while we're actively using it
+                this.resetCounterTimer();
+
+                // Step 6: Set reference position for back flashbacks
+                // During recording: use end of recordings as reference
+                // During playback: use current playback position as reference
+                if (!this.isPlaying) {
+                    // Starting flashback from recording state - use end of recordings
+                    this.currentReferencePosition = null;
+                }
+                // During playback, currentReferencePosition will be updated by advancePlayback
+                // and will be used as the reference for the next flashback
+
+                // Step 7: Immediately start the flashback playback
+                // This will stop current recording and start playing from the calculated timestamp
+                this.startFlashbackPlayback(flashbackDuration);
+            }
+
+            handleForwardPress() {
+                // Step 1: Check if we're currently playing back
+                if (!this.isPlaying) {
+                    this.showMessage('Forward only works during flashback playback!', 'error');
+                    return;
+                }
+
+                // Step 2: Reset back counter when switching to forward direction
+                // This ensures independent counters for each direction
+                this.backPressCount = 0;
+                this.updatePressCount();
+
+                // Step 3: Increment the forward button press counter
+                this.forwardPressCount++;
+                this.updateForwardCount();
+
+                // Step 4: Calculate forward duration using exponential formula
+                // Same as back button: 1s, 2s, 4s, 8s, 16s...
+                const forwardDuration = Math.pow(2, this.forwardPressCount - 1);
+
+                this.showMessage(`Forward: +${forwardDuration}s (${this.forwardPressCount} presses)`, 'success');
+
+                // Step 5: Reset the 3-second timer that clears the forward counter
+                this.resetForwardCounterTimer();
+
+                // Step 6: Advance playback from current position
+                // After advancing forward, update reference position for future back flashbacks
+                this.advancePlayback(forwardDuration);
+            }
+
+            startFlashbackPlayback(flashbackDuration) {
+                console.log(`=== STARTING FLASHBACK PLAYBACK ===`);
+                console.log(`Input: flashbackDuration=${flashbackDuration}s`);
+                console.log(`State: isRecording=${this.isRecording}, recordedSessions=${this.recordedSessions.length}, currentChunks=${this.currentSessionChunks.length}`);
+
+                // Step 1: Verify we have recording data to play back
+                if (this.recordedSessions.length === 0 && this.currentSessionChunks.length === 0) {
+                    console.log(`ERROR: No recording data available`);
+                    this.showMessage('No recording data available for playback', 'error');
+                    return;
+                }
+
+                // Step 2: Stop any current recording and SAVE SESSION SYNCHRONOUSLY
+                if (this.isRecording) {
+                    console.log(`Stopping current recording, chunks: ${this.currentSessionChunks.length}`);
+
+                    // Manually save current session BEFORE stopping (to avoid async race condition)
+                    if (this.currentSessionChunks.length > 0) {
+                        console.log(`Validating ${this.currentSessionChunks.length} chunks before saving...`);
+
+                        // Step 1: Validate individual chunks
+                        const validChunks = this.currentSessionChunks.filter((chunk, index) => {
+                            if (!chunk) {
+                                console.warn(`Chunk ${index}: null/undefined chunk`);
+                                return false;
+                            }
+                            if (chunk.size === 0) {
+                                console.warn(`Chunk ${index}: empty chunk (0 bytes)`);
+                                return false;
+                            }
+                            if (!chunk.type || !chunk.type.includes('video/webm')) {
+                                console.warn(`Chunk ${index}: invalid type "${chunk.type}"`);
+                                return false;
+                            }
+                            return true;
+                        });
+
+                        console.log(`Found ${validChunks.length}/${this.currentSessionChunks.length} valid chunks`);
+
+                        if (validChunks.length === 0) {
+                            console.warn('No valid chunks found, skipping session save');
+                            this.currentSessionChunks = [];
+                            return;
+                        }
+
+                        if (validChunks.length < this.currentSessionChunks.length) {
+                            console.warn(`Filtered out ${this.currentSessionChunks.length - validChunks.length} corrupted chunks`);
+                        }
+
+                        // Step 2: Create blob with only valid chunks
+                        console.log(`Creating blob from ${validChunks.length} valid chunks`);
+                        const currentSessionBlob = new Blob(validChunks, { type: 'video/webm' });
+                        console.log(`Blob created, size: ${currentSessionBlob.size} bytes`);
+
+                        // Step 3: Validate final blob
+                        const minBlobSize = 50000; // 50KB minimum for a valid video session
+                        if (currentSessionBlob.size < minBlobSize) {
+                            console.warn(`Blob too small (${currentSessionBlob.size} bytes < ${minBlobSize} bytes minimum), skipping session save`);
+                            this.currentSessionChunks = [];
+                            return;
+                        }
+
+                        // Step 4: Test blob URL creation (final validation)
+                        try {
+                            const testUrl = URL.createObjectURL(currentSessionBlob);
+                            console.log(`Blob URL created successfully: ${testUrl}`);
+                            URL.revokeObjectURL(testUrl);
+
+                            // Step 5: Create and save session data
+                            const sessionData = {
+                                chunksData: [...validChunks],               // Keep only valid raw chunks
+                                blob: currentSessionBlob,                   // The validated video data
+                                timestamp: Date.now(),                      // When session was saved
+                                chunkCount: validChunks.length,             // Number of valid chunks
+                                estimatedDuration: validChunks.length * 1.0 // Estimated duration in seconds
+                            };
+
+                            // Add to our collection of completed sessions
+                            this.recordedSessions.push(sessionData);
+                            console.log(`Session saved during flashback: ${this.recordedSessions.length} sessions total, ${validChunks.length} chunks, ~${sessionData.estimatedDuration}s`);
+
+                        } catch (error) {
+                            console.error('Failed to create valid blob URL:', error);
+                            console.warn('Skipping session save due to blob URL creation failure');
+                        }
+
+                        // Clear current session chunks to prepare for next recording
+                        this.currentSessionChunks = [];
+                        console.log(`Cleared currentSessionChunks, now empty`);
+                    } else {
+                        console.log(`No chunks to save in current session`);
+                    }
+
+                    console.log(`Calling mediaRecorder.stop()`);
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    this.stopTimer();
+                    console.log(`Recording stopped`);
+                } else {
+                    console.log(`Not currently recording, skipping stop`);
+                }
+
+                // APPROACH: Play sessions sequentially from the calculated start point
+                console.log(`Flashback: playing sessions sequentially from calculated start point`);
+                console.log(`Recorded sessions: ${this.recordedSessions.length}`);
+                console.log(`Current session chunks: ${this.currentSessionChunks.length}`);
+
+                // Step 3: Prepare all sessions for sequential playback
+                // All sessions are now in recordedSessions (including the one we just saved)
+                const allSessions = [...this.recordedSessions];
+                console.log(`allSessions created with ${allSessions.length} sessions`);
+                allSessions.forEach((session, index) => {
+                    console.log(`Session ${index}: ${session.chunkCount} chunks, ${session.estimatedDuration}s, blob size: ${session.blob.size} bytes`);
+                });
+
+                if (allSessions.length === 0) {
+                    this.showMessage('No recording data available for playback', 'error');
+                    return;
+                }
+
+                // Step 4: Calculate reference position for flashback calculation
+                let totalDuration = 0;
+                allSessions.forEach((session, index) => {
+                    console.log(`Session ${index}: estimated duration ${session.estimatedDuration}s, blob size ${session.blob.size} bytes`);
+                    totalDuration += session.estimatedDuration;
+                });
+
+                console.log(`Total estimated duration across all sessions: ${totalDuration}s`);
+
+                // Use current reference position if set (after forward navigation), otherwise use end of recordings
+                const referencePosition = this.currentReferencePosition !== null ? this.currentReferencePosition : totalDuration;
+                console.log(`Using reference position: ${referencePosition}s ${this.currentReferencePosition !== null ? '(from current playback position)' : '(from end of recordings)'} ${this.currentReferencePosition !== null ? `(${this.currentReferencePosition})` : ''}`);
+
+                if (referencePosition < flashbackDuration) {
+                    // Fallback: play from beginning of first session
+                    console.log(`Not enough data for ${flashbackDuration}s flashback from reference position ${referencePosition}s. Playing from beginning of first session.`);
+                    this.showMessage(`Playing from beginning (reference at ${referencePosition}s)`, 'success');
+                    this.playSessionsFromStart(allSessions);
+                    return;
+                }
+
+                // Step 5: Calculate start timestamp from reference position (going backwards)
+                const startTimestamp = Math.max(0, referencePosition - flashbackDuration);
+                console.log(`Flashback duration: ${flashbackDuration}s, reference: ${referencePosition}s, starting at ${startTimestamp}s from beginning of all recordings`);
+
+                // Step 6: Update reference position for future flashbacks
+                // The next flashback should be calculated from this new position
+                this.currentReferencePosition = startTimestamp;
+                console.log(`Updated currentReferencePosition to ${startTimestamp}s for future flashbacks`);
+
+                // Step 7: Find which session contains the start timestamp
+                console.log(`Calling playSessionsFromTimestamp with startTimestamp: ${startTimestamp}s`);
+                this.playSessionsFromTimestamp(allSessions, startTimestamp);
+            }
+
+            advancePlayback(forwardDuration) {
+                // Step 1: Get current playback position in total timeline
+                if (!this.playbackVideo || !this.isPlaying) {
+                    console.error('No active playback to advance');
+                    return;
+                }
+
+                // Calculate current position in total timeline
+                let currentTotalTime = 0;
+
+                // Add durations of completed sessions
+                for (let i = 0; i < this.currentPlaybackIndex; i++) {
+                    currentTotalTime += this.allSessions[i].estimatedDuration;
+                }
+
+                // Add current playback time in current session
+                currentTotalTime += this.playbackVideo.currentTime;
+
+                console.log(`Current position: ${currentTotalTime}s in total timeline`);
+
+                // Step 2: Calculate new position by adding forward duration
+                const newTotalTime = currentTotalTime + forwardDuration;
+                console.log(`Advancing to: ${newTotalTime}s (+${forwardDuration}s)`);
+
+                // Step 3: Check if we exceed total recording duration
+                let totalDuration = 0;
+                this.allSessions.forEach(session => totalDuration += session.estimatedDuration);
+
+                if (newTotalTime >= totalDuration) {
+                    // Beyond end - show message and continue from end position
+                    console.log(`Advanced beyond end (${newTotalTime}s >= ${totalDuration}s total)`);
+                    this.showMessage(`At end of recording (${totalDuration}s)`, 'success');
+                    // Continue playing from end position (will naturally end playback)
+                    return;
+                }
+
+                // Step 4: Update reference position for future back flashbacks
+                // After advancing forward, future back flashbacks should be calculated from this new position
+                this.currentReferencePosition = newTotalTime;
+                console.log(`Updated reference position to ${newTotalTime}s for future back flashbacks`);
+
+                // Step 5: Find which session contains the new timestamp
+                this.playSessionsFromTimestamp(this.allSessions, newTotalTime);
+            }
+
+            playSessionsFromTimestamp(allSessions, startTimestamp) {
+                console.log(`=== PLAYING SESSIONS FROM TIMESTAMP ===`);
+                console.log(`startTimestamp: ${startTimestamp}s`);
+                console.log(`allSessions: ${allSessions.length} sessions`);
+                console.log(`Session details:`);
+                allSessions.forEach((session, index) => {
+                    console.log(`  Session ${index}: ${session.estimatedDuration}s, blob size: ${session.blob ? session.blob.size : 'no blob'} bytes`);
+                });
+
+                // Update reference position for future flashbacks
+                // When navigating during playback, future flashbacks should be relative to this new position
+                this.currentReferencePosition = startTimestamp;
+
+                // Store sessions for forward navigation
+                this.allSessions = allSessions;
+
+                // Step 1: Set up video element for playback
+                if (!this.playbackVideo) {
+                    this.playbackVideo = document.createElement('video');
+                    this.playbackVideo.style.width = '100%';
+                    this.playbackVideo.style.height = '100%';
+                    this.playbackVideo.style.objectFit = 'cover';
+                    this.playbackVideo.controls = true; // Native controls
+                }
+
+                // Step 2: Switch from live camera view to playback view
+                if (this.videoPreview.style.display !== 'none') {
+                    this.videoPreview.style.display = 'none';
+                    this.videoContainer.appendChild(this.playbackVideo);
+                }
+
+                // Step 3: Find which session contains the start timestamp
+                let accumulatedTime = 0;
+                let startSessionIndex = -1;
+                let seekTimeInSession = 0;
+
+                console.log(`Finding session for startTimestamp: ${startTimestamp}s`);
+                for (let i = 0; i < allSessions.length; i++) {
+                    const sessionDuration = allSessions[i].estimatedDuration;
+                    console.log(`Checking session ${i}: accumulated ${accumulatedTime}s, duration ${sessionDuration}s, range ${accumulatedTime}s-${accumulatedTime + sessionDuration}s`);
+                    if (startTimestamp < accumulatedTime + sessionDuration) {
+                        // Start timestamp is in this session
+                        startSessionIndex = i;
+                        seekTimeInSession = startTimestamp - accumulatedTime;
+                        console.log(`*** FOUND *** in session ${i}: seek to ${seekTimeInSession}s within this session`);
+                        console.log(`Will play sessions ${i} to ${allSessions.length - 1} (${allSessions.length - i} sessions total)`);
+                        break;
+                    }
+                    accumulatedTime += sessionDuration;
+                }
+
+                if (startSessionIndex === -1) {
+                    console.error('Could not find session for timestamp', startTimestamp);
+                    this.resumeRecording();
+                    return;
+                }
+
+                console.log(`Starting playback in session ${startSessionIndex} at ${seekTimeInSession}s`);
+
+                // Step 4: Start playback from the identified session
+                this.startSessionIndex = startSessionIndex;
+                this.currentPlaybackIndex = startSessionIndex;
+                console.log(`Setting currentPlaybackIndex to ${startSessionIndex}, will play ${allSessions.length - startSessionIndex} sessions`);
+                this.playSessionsSequentially(allSessions, seekTimeInSession);
+            }
+
+            playSessionsFromStart(allSessions) {
+                // Store sessions for forward navigation
+                this.allSessions = allSessions;
+
+                // Play from the very beginning of the first session
+                console.log('Playing from beginning of first session');
+                this.startSessionIndex = 0;
+                this.currentPlaybackIndex = 0;
+                this.playSessionsSequentially(allSessions, 0);
+            }
+
+            playSessionsSequentially(allSessions, initialSeekTime) {
+                console.log(`=== STARTING SEQUENTIAL PLAYBACK ===`);
+                console.log(`allSessions: ${allSessions.length} sessions`);
+                console.log(`currentPlaybackIndex: ${this.currentPlaybackIndex}`);
+                console.log(`startSessionIndex: ${this.startSessionIndex}`);
+                console.log(`initialSeekTime: ${initialSeekTime}s`);
+
+                const playCurrentSession = () => {
+                    console.log(`--- PLAY CURRENT SESSION ---`);
+                    console.log(`currentPlaybackIndex: ${this.currentPlaybackIndex}, allSessions.length: ${allSessions.length}`);
+
+                    if (this.currentPlaybackIndex >= allSessions.length) {
+                        // All sessions played, resume recording
+                        console.log('*** ALL SESSIONS PLAYED *** - resuming recording');
+                        this.resumeRecording();
+                        return;
+                    }
+
+                    const session = allSessions[this.currentPlaybackIndex];
+                    const sessionBlob = session.blob;
+                    console.log(`Playing session ${this.currentPlaybackIndex}/${allSessions.length - 1}, blob size: ${sessionBlob.size} bytes, estimated duration: ${session.estimatedDuration}s`);
+
+                    // Clean up previous URL
+                    if (this.playbackVideo.src) {
+                        URL.revokeObjectURL(this.playbackVideo.src);
+                    }
+
+                    const url = URL.createObjectURL(sessionBlob);
+                    this.playbackVideo.src = url;
+
+                    // Set up event listeners
+                    this.playbackVideo.removeEventListener('loadedmetadata', this.handleMetadataLoad);
+                    this.playbackVideo.removeEventListener('ended', this.handlePlaybackEnd);
+                    this.playbackVideo.removeEventListener('error', this.handleVideoError);
+
+                    this.handleMetadataLoad = () => {
+                        console.log(`Session ${this.currentPlaybackIndex} loaded, duration: ${this.playbackVideo.duration}s`);
+
+                        // Seek to the right position (only for the first session in the sequence)
+                        if (this.currentPlaybackIndex === this.startSessionIndex) {
+                            const safeSeekTime = Math.min(initialSeekTime, this.playbackVideo.duration - 0.1);
+                            this.playbackVideo.currentTime = Math.max(0, safeSeekTime);
+                            console.log(`*** SEEKING *** to ${safeSeekTime}s in first session (initialSeekTime was ${initialSeekTime}s)`);
+                        } else {
+                            this.playbackVideo.currentTime = 0;
+                            console.log(`*** STARTING *** session ${this.currentPlaybackIndex} from beginning (not first session)`);
+                        }
+
+                        this.playbackVideo.play();
+                        this.isPlaying = true;
+                        this.updateUI('playing');
+                    };
+
+                    this.handlePlaybackEnd = () => {
+                        console.log(`*** SESSION ${this.currentPlaybackIndex} ENDED ***`);
+                        console.log(`Moving to next session: ${this.currentPlaybackIndex + 1}/${allSessions.length}`);
+                        // Move to next session
+                        this.currentPlaybackIndex++;
+                        console.log(`New currentPlaybackIndex: ${this.currentPlaybackIndex}`);
+                        playCurrentSession();
+                    };
+
+                    this.handleVideoError = (error) => {
+                        console.error(`Error playing session ${this.currentPlaybackIndex}:`, error);
+                        console.log(`Session ${this.currentPlaybackIndex} corrupted, skipping to next session`);
+
+                        // Skip corrupted session and try next one
+                        this.currentPlaybackIndex++;
+                        console.log(`Trying next session: ${this.currentPlaybackIndex}`);
+                        playCurrentSession(); // Continue with next session instead of stopping
+                    };
+
+                    this.playbackVideo.addEventListener('loadedmetadata', this.handleMetadataLoad, { once: true });
+                    this.playbackVideo.addEventListener('ended', this.handlePlaybackEnd, { once: true });
+                    this.playbackVideo.addEventListener('error', this.handleVideoError, { once: true });
+
+                    // Timeline position updates during playback
+                    this.handlePlaybackTimeUpdate = () => {
+                        this.updateTimeline();
+                    };
+                    this.playbackVideo.addEventListener('timeupdate', this.handlePlaybackTimeUpdate);
+                };
+
+                playCurrentSession();
+            }
+
+
+            resumeRecording() {
+                // Step 1: Log current state for debugging
+                const totalSessions = this.recordedSessions.length;
+                const currentChunks = this.currentSessionChunks.length;
+                console.log(`Resume recording: ${totalSessions} completed sessions, ${currentChunks} current chunks`);
+
+                // Step 2: Clean up any pending timeouts and temporary properties
+                if (this.playbackTimeout) {
+                    clearTimeout(this.playbackTimeout);
+                    delete this.playbackTimeout;
+                }
+                if (this.forwardResetTimer) {
+                    clearTimeout(this.forwardResetTimer);
+                    delete this.forwardResetTimer;
+                }
+                if (this.currentFlashbackDuration !== undefined) {
+                    delete this.currentFlashbackDuration;
+                    delete this.currentRealDuration;
+                }
+                // Clean up playback session data
+                this.allSessions = null;
+                this.currentPlaybackIndex = -1;
+                this.currentReferencePosition = null;
+
+                // Reset rolling buffer status for new recording session
+                this.isRollingBufferActive = false;
+                this.availableRecordedSeconds = 0; // Reset available content counter
+                this.currentSessionDuration = 0; // Reset session duration counter
+                this.updateDurationDisplay();
+
+                // Step 3: Switch back from playback view to live camera view
+                if (this.playbackVideo && this.playbackVideo.parentNode) {
+                    this.playbackVideo.parentNode.removeChild(this.playbackVideo);
+                }
+                this.videoPreview.style.display = 'block';
+
+                // Step 4: Update internal state
+                this.isPlaying = false;
+                this.updateUI('recording');
+
+                // Step 5: Start a new recording session
+                // This will create a fresh currentSessionChunks array and continue accumulating
+                this.startRecording();
+            }
+
+            handleStopFlashback() {
+                // US-009: Stop Flashback & Resume Recording
+                // Only works during flashback playback
+                if (!this.isPlaying) {
+                    this.showMessage('No flashback in progress', 'error');
+                    return;
+                }
+
+                console.log('Stop flashback requested - stopping playback and resuming recording');
+
+                // Step 1: Stop current video playback immediately
+                if (this.playbackVideo) {
+                    this.playbackVideo.pause();
+                    this.playbackVideo.currentTime = 0;
+
+                    // Remove event listeners to prevent conflicts
+                    this.playbackVideo.removeEventListener('loadedmetadata', this.handleMetadataLoad);
+                    this.playbackVideo.removeEventListener('ended', this.handlePlaybackEnd);
+                    this.playbackVideo.removeEventListener('error', this.handleVideoError);
+                    this.playbackVideo.removeEventListener('timeupdate', this.handlePlaybackTimeUpdate);
+                }
+
+                // Step 2: Clear any pending timeouts
+                if (this.playbackTimeout) {
+                    clearTimeout(this.playbackTimeout);
+                    delete this.playbackTimeout;
+                }
+                if (this.forwardResetTimer) {
+                    clearTimeout(this.forwardResetTimer);
+                    delete this.forwardResetTimer;
+                }
+
+                // Step 3: Clean up playback session data
+                this.allSessions = null;
+                this.currentPlaybackIndex = -1;
+                this.currentReferencePosition = null;
+
+                // Step 4: Switch back from playback view to live camera view
+                if (this.playbackVideo && this.playbackVideo.parentNode) {
+                    this.playbackVideo.parentNode.removeChild(this.playbackVideo);
+                }
+                this.videoPreview.style.display = 'block';
+
+                // Step 5: Update internal state
+                this.isPlaying = false;
+                this.updateUI('recording');
+
+                // Step 6: Start recording immediately (same as resumeRecording but without reset)
+                // This continues the current recording session seamlessly
+                this.startRecording();
+
+                this.showMessage('Flashback stopped - recording resumed', 'success');
+            }
+
+            stopRecording() {
+                // No stop functionality - recording continues until flashback playback ends
+                // Then automatically resumes
+                this.showMessage('Recording cannot be stopped manually', 'error');
+            }
+
+            handleRecordingStop() {
+                // Step 1: This method is called automatically when MediaRecorder.stop() is executed
+                // It happens when we press back button during recording (to start flashback)
+                // It does NOT happen when user manually stops recording (there's no stop button)
+
+                // Step 2: Save the current recording session for future flashbacks
+                // Skip if chunks were already saved manually (e.g., during flashback in startFlashbackPlayback)
+                // This prevents duplicate session saving when MediaRecorder.stop() triggers this method asynchronously
+                if (this.currentSessionChunks.length > 0) {
+                    console.log(`Validating ${this.currentSessionChunks.length} chunks in handleRecordingStop...`);
+
+                    // Step 1: Validate individual chunks (same logic as manual save)
+                    const validChunks = this.currentSessionChunks.filter((chunk, index) => {
+                        if (!chunk) {
+                            console.warn(`Chunk ${index}: null/undefined chunk`);
+                            return false;
+                        }
+                        if (chunk.size === 0) {
+                            console.warn(`Chunk ${index}: empty chunk (0 bytes)`);
+                            return false;
+                        }
+                        if (!chunk.type || !chunk.type.includes('video/webm')) {
+                            console.warn(`Chunk ${index}: invalid type "${chunk.type}"`);
+                            return false;
+                        }
+                        return true;
+                    });
+
+                    console.log(`Found ${validChunks.length}/${this.currentSessionChunks.length} valid chunks`);
+
+                    if (validChunks.length === 0) {
+                        console.warn('No valid chunks found in handleRecordingStop, skipping session save');
+                        this.currentSessionChunks = [];
+                        return;
+                    }
+
+                    // Step 2: Create blob with only valid chunks
+                    const sessionBlob = new Blob(validChunks, { type: 'video/webm' });
+                    console.log(`Blob created in handleRecordingStop, size: ${sessionBlob.size} bytes`);
+
+                    // Step 3: Validate final blob
+                    const minBlobSize = 100000; // 100KB minimum for a valid video session
+                    if (sessionBlob.size < minBlobSize) {
+                        console.warn(`Blob too small in handleRecordingStop (${sessionBlob.size} bytes < ${minBlobSize} bytes minimum), skipping session save`);
+                        this.currentSessionChunks = [];
+                        return;
+                    }
+
+                    // Additional validation: check if blob size is reasonable for duration
+                    const sessionDuration = validChunks.length;
+                    const expectedMinSize = sessionDuration * 25000; // ~25KB/s for 360p compressed
+                    if (sessionBlob.size < expectedMinSize) {
+                        console.warn(`Blob size ${sessionBlob.size} too small for ${sessionDuration}s duration (expected min: ${expectedMinSize}), skipping`);
+                        this.currentSessionChunks = [];
+                        return;
+                    }
+
+                    // Step 4: Test blob URL creation (final validation)
+                    try {
+                        const testUrl = URL.createObjectURL(sessionBlob);
+                        console.log(`Blob URL created successfully in handleRecordingStop: ${testUrl}`);
+                        URL.revokeObjectURL(testUrl);
+
+                        // Step 5: Store session data for later retrieval
+                        const sessionData = {
+                            chunksData: [...validChunks],        // Keep raw chunks for rolling buffer
+                            blob: sessionBlob,                    // The actual video data (for playback)
+                            timestamp: Date.now(),                // When session was saved
+                            chunkCount: validChunks.length,       // Number of chunks
+                            estimatedDuration: validChunks.length * 1.0 // Estimated duration in seconds
+                        };
+
+                        // Add to our collection of completed sessions
+                        this.recordedSessions.push(sessionData);
+
+                        console.log(`Session saved: ${this.recordedSessions.length} sessions total, ${validChunks.length} chunks, ~${sessionData.estimatedDuration}s, blob size: ${sessionBlob.size} bytes`);
+
+                    } catch (error) {
+                        console.error('Failed to create valid blob URL in handleRecordingStop:', error);
+                        console.warn('Skipping session save due to blob URL creation failure');
+                        this.currentSessionChunks = [];
+                        return;
+                    }
+
+                    // Step 6: Clear current session chunks to prepare for next recording
+                    // This is crucial - without this, chunks would keep accumulating in the same array
+                    this.currentSessionChunks = [];
+                }
+            }
+
+            updateUI(state) {
+                switch (state) {
+                    case 'recording':
+                        this.startBtn.disabled = true;
+                        this.backBtn.disabled = false;
+                        this.forwardBtn.disabled = true;
+                        this.stopBtn.style.display = 'none'; // Hide stop button during recording
+                        this.statusText.textContent = 'Recording...';
+                        this.recordingDot.style.display = 'block';
+                        this.videoOverlay.style.display = 'block';
+                        break;
+                    case 'playing':
+                        this.startBtn.disabled = true;
+                        this.backBtn.disabled = false;
+                        this.forwardBtn.disabled = false;
+                        this.stopBtn.style.display = 'inline-block'; // Show stop button during flashback
+                        this.statusText.textContent = 'Playing flashback...';
+                        this.recordingDot.style.display = 'none';
+                        this.videoOverlay.style.display = 'none';
+                        break;
+                    case 'stopped':
+                        this.startBtn.disabled = false;
+                        this.backBtn.disabled = true;
+                        this.forwardBtn.disabled = true;
+                        this.stopBtn.style.display = 'none'; // Hide stop button when stopped
+                        this.statusText.textContent = 'Ready to record';
+                        this.recordingDot.style.display = 'none';
+                        this.videoOverlay.style.display = 'none';
+                        this.backPressCount = 0;
+                        this.forwardPressCount = 0;
+                        this.currentReferencePosition = null;
+                        this.updatePressCount();
+                        this.updateForwardCount();
+                        break;
+                }
+            }
+
+            startTimer() {
+                this.timerInterval = setInterval(() => {
+                    const elapsed = Date.now() - this.recordingStartTime;
+                    const seconds = Math.floor(elapsed / 1000);
+                    const minutes = Math.floor(seconds / 60);
+                    const hours = Math.floor(minutes / 60);
+                    
+                    this.recordingTimer.textContent = 
+                        `${hours.toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+            }
+
+            getCurrentRecordingTime() {
+                if (this.recordingStartTime) {
+                    return Math.floor((Date.now() - this.recordingStartTime) / 1000);
+                }
+                return 0;
+            }
+
+            loadSettings() {
+                // Settings panel removed - no settings to load
+                // Keep function for potential future use
+            }
+
+            saveSettings() {
+                // Settings panel removed - no settings to save
+                // Keep function for potential future use
+            }
+
+            handleDurationChange() {
+                // Settings panel removed - no UI controls to handle
+                // Keep function for potential future use
+            }
+
+            handleNumberDurationChange() {
+                // Settings panel removed - no UI controls to handle
+                // Keep function for potential future use
+            }
+
+            updateDurationDisplay() {
+                // Settings panel removed - no duration display to update
+                // Keep function for potential future use
+            }
+
+            cleanupOldestSecond() {
+                // Remove the oldest complete session to free memory for rolling buffer
+                // NEVER remove chunks from current session - it would corrupt the video
+
+                // Find the oldest complete session (not the current one being recorded)
+                let oldestSessionIndex = -1;
+                for (let i = 0; i < this.recordedSessions.length; i++) {
+                    // Only consider sessions that are complete (have a blob)
+                    if (this.recordedSessions[i].blob && this.recordedSessions[i].chunksData && this.recordedSessions[i].chunksData.length > 0) {
+                        oldestSessionIndex = i;
+                        break;
+                    }
+                }
+
+                // If no complete sessions available, don't cleanup
+                if (oldestSessionIndex === -1) {
+                    console.log('No complete sessions available for cleanup');
+                    return;
+                }
+
+                // Remove the entire oldest session
+                const removedSession = this.recordedSessions.splice(oldestSessionIndex, 1)[0];
+                const removedDuration = removedSession.estimatedDuration;
+
+                console.log(`Removed complete session ${oldestSessionIndex} (${removedDuration}s, ${removedSession.blob.size} bytes)`);
+
+                // Clean up blob URL
+                if (removedSession.blob) {
+                    URL.revokeObjectURL(removedSession.blob);
+                }
+
+                // Decrement available recorded seconds
+                this.availableRecordedSeconds -= removedDuration;
+                this.updateDurationDisplay();
+
+                // Update timeline immediately to reposition markers
+                this.updateTimeline();
+            }
+
+            // Centralized timeline window calculation
+            getTimelineWindow() {
+                const totalEver = this.totalEverRecordedSeconds;
+                const maxDuration = this.maxRecordingDuration;
+                const availableStart = totalEver - this.availableRecordedSeconds;
+
+                return {
+                    startTime: totalEver <= maxDuration ? 0 : totalEver - maxDuration,
+                    endTime: totalEver <= maxDuration ? maxDuration : totalEver,
+                    availableContentStart: availableStart,
+                    availableContentEnd: totalEver
+                };
+            }
+
+            updatePressCount() {
+                if (this.pressCount) {
+                    this.pressCount.textContent = this.backPressCount;
+                }
+            }
+
+            updateForwardCount() {
+                if (this.forwardCount) {
+                    this.forwardCount.textContent = this.forwardPressCount;
+                }
+            }
+
+            resetCounterTimer() {
+                // Step 1: Clear any existing timer to prevent multiple timers running
+                if (this.counterResetTimer) {
+                    clearTimeout(this.counterResetTimer);
+                }
+
+                // Step 2: Set a new 0.7-second timer
+                // If user doesn't press back button again within 0.7 seconds,
+                // the counter resets to 0 (starting fresh flashback sequence)
+                this.counterResetTimer = setTimeout(() => {
+                    // Reset counter to start flashback sequence from beginning (1s)
+                    this.backPressCount = 0;
+                    this.updatePressCount();
+                    this.showMessage('Back counter reset!', 'success');
+                }, 700);
+            }
+
+            resetForwardCounterTimer() {
+                // Step 1: Clear any existing forward timer to prevent multiple timers running
+                if (this.forwardResetTimer) {
+                    clearTimeout(this.forwardResetTimer);
+                }
+
+                // Step 2: Set a new 0.7-second timer
+                // If user doesn't press forward button again within 0.7 seconds,
+                // the forward counter resets to 0
+                this.forwardResetTimer = setTimeout(() => {
+                    // Reset forward counter
+                    this.forwardPressCount = 0;
+                    this.updateForwardCount();
+                    this.showMessage('Forward counter reset!', 'success');
+                }, 700);
+            }
+
+            createAutomaticSession() {
+                console.log(`Creating automatic session after ${this.currentSessionDuration}s (${this.currentSessionChunks.length} chunks)`);
+
+                if (this.currentSessionChunks.length === 0) {
+                    console.log('No chunks to save in automatic session');
+                    return;
+                }
+
+                // Step 1: Validate chunks (same logic as manual save)
+                const validChunks = this.currentSessionChunks.filter((chunk, index) => {
+                    if (!chunk) {
+                        console.warn(`Chunk ${index}: null/undefined chunk`);
+                        return false;
+                    }
+                    if (chunk.size === 0) {
+                        console.warn(`Chunk ${index}: empty chunk (0 bytes)`);
+                        return false;
+                    }
+                    if (!chunk.type || !chunk.type.includes('video/webm')) {
+                        console.warn(`Chunk ${index}: invalid type "${chunk.type}"`);
+                        return false;
+                    }
+                    return true;
+                });
+
+                if (validChunks.length === 0) {
+                    console.warn('No valid chunks found for automatic session');
+                    this.currentSessionChunks = [];
+                    this.currentSessionDuration = 0;
+                    return;
+                }
+
+                // Step 2: Create blob
+                const sessionBlob = new Blob(validChunks, { type: 'video/webm' });
+                console.log(`Automatic session blob created, size: ${sessionBlob.size} bytes`);
+
+                // Step 3: Validate blob
+                const minBlobSize = 100000; // 100KB minimum for 360p video
+                if (sessionBlob.size < minBlobSize) {
+                    console.warn(`Automatic session blob too small (${sessionBlob.size} bytes < ${minBlobSize} bytes minimum)`);
+                    this.currentSessionChunks = [];
+                    this.currentSessionDuration = 0;
+                    return;
+                }
+
+                // Additional validation: check if blob size is reasonable for duration
+                const expectedMinSize = this.currentSessionDuration * 25000; // ~25KB/s for 360p compressed
+                if (sessionBlob.size < expectedMinSize) {
+                    console.warn(`Blob size ${sessionBlob.size} too small for ${this.currentSessionDuration}s duration (expected min: ${expectedMinSize})`);
+                    this.currentSessionChunks = [];
+                    this.currentSessionDuration = 0;
+                    return;
+                }
+
+                // Step 4: Test blob URL creation
+                try {
+                    const testUrl = URL.createObjectURL(sessionBlob);
+                    URL.revokeObjectURL(testUrl);
+
+                    // Step 5: Create session data
+                    const sessionData = {
+                        chunksData: [...validChunks],
+                        blob: sessionBlob,
+                        timestamp: Date.now(),
+                        chunkCount: validChunks.length,
+                        estimatedDuration: validChunks.length * 1.0,
+                        isAutomatic: true // Flag to identify automatic sessions
+                    };
+
+                    // Add to recorded sessions
+                    this.recordedSessions.push(sessionData);
+                    console.log(`Automatic session saved: ${this.recordedSessions.length} total sessions, ${validChunks.length} chunks, ~${sessionData.estimatedDuration}s`);
+
+                    // Step 6: Reset for next session
+                    this.currentSessionChunks = [];
+                    this.currentSessionDuration = 0;
+                    console.log('Reset for next automatic session');
+
+                } catch (error) {
+                    console.error('Failed to create valid blob URL for automatic session:', error);
+                    console.warn('Skipping automatic session save');
+                    this.currentSessionChunks = [];
+                    this.currentSessionDuration = 0;
+                }
+            }
+
+            // Dynamic duration adaptation based on device capabilities
+            detectDeviceProfile() {
+                try {
+                    // Memory detection (Chrome/Edge)
+                    const ramGB = navigator.deviceMemory || 4; // Fallback 4GB
+
+                    // CPU cores
+                    const cpuCores = navigator.hardwareConcurrency || 4; // Fallback 4 cores
+
+                    // Screen size for device type estimation
+                    const screenSize = Math.max(screen.width, screen.height);
+                    const pixelRatio = window.devicePixelRatio || 1;
+
+                    // User agent analysis
+                    const ua = navigator.userAgent.toLowerCase();
+                    const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
+                    const isTablet = isMobile && screenSize > 1000;
+                    const isIOS = /ipad|iphone|ipod/.test(ua);
+
+                    // Classification logic
+                    if (isMobile && !isTablet) {
+                        if (ramGB < 4 || cpuCores < 4) {
+                            return 'low_end_mobile';
+                        } else if (ramGB >= 6 && cpuCores >= 6) {
+                            return 'high_end_mobile';
+                        } else {
+                            return 'standard_mobile';
+                        }
+                    } else if (isTablet) {
+                        return 'tablet';
+                    } else {
+                        // Desktop or unknown
+                        if (ramGB >= 8 && cpuCores >= 8) {
+                            return 'high_end_desktop';
+                        } else {
+                            return 'desktop';
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Device detection failed, using conservative defaults:', error);
+                    return 'standard_mobile'; // Safe fallback
+                }
+            }
+
+            // Test available memory by creating test blobs (non-blocking)
+            async testAvailableMemory() {
+                try {
+                    // Start with conservative estimate based on device profile
+                    let estimatedMB = 100; // Minimum safe
+
+                    // Quick memory test - create small test blobs
+                    const testSizes = [10, 25, 50, 100]; // MB to test
+                    const maxTestTime = 1000; // 1 second max for testing
+
+                    for (const sizeMB of testSizes) {
+                        const startTime = Date.now();
+
+                        try {
+                            // Create test data (simulated video chunk)
+                            const testData = new Uint8Array(sizeMB * 1024 * 1024);
+                            // Fill with some data to simulate real usage
+                            for (let i = 0; i < Math.min(1000, testData.length); i++) {
+                                testData[i] = Math.random() * 256;
+                            }
+
+                            // Create blob and test URL creation
+                            const testBlob = new Blob([testData], { type: 'video/webm' });
+                            const testUrl = URL.createObjectURL(testBlob);
+
+                            // Clean up immediately
+                            URL.revokeObjectURL(testUrl);
+
+                            // If we get here without error, memory is available
+                            estimatedMB = Math.max(estimatedMB, sizeMB * 2); // Conservative estimate
+
+                            // Don't spend too much time testing
+                            if (Date.now() - startTime > maxTestTime / testSizes.length) {
+                                break;
+                            }
+                        } catch (error) {
+                            // Memory limit reached
+                            console.log(`Memory test failed at ${sizeMB}MB:`, error.message);
+                            break;
+                        }
+                    }
+
+                    console.log(`Memory test completed: ~${estimatedMB}MB available`);
+                    return estimatedMB;
+
+                } catch (error) {
+                    console.warn('Memory testing failed:', error);
+                    return 100; // Safe fallback
+                }
+            }
+
+            getOptimalDurationForProfile(profile) {
+                // Base durations in seconds for each profile (360p = ~50% less data than 720p)
+                const baseDurations = {
+                    'low_end_mobile': 90,      // Extended from 30s (360p compression)
+                    'standard_mobile': 240,    // Extended from 60s
+                    'high_end_mobile': 480,    // Extended from 90s
+                    'tablet': 600,             // Extended from 120s
+                    'desktop': 900,            // Extended from 180s
+                    'high_end_desktop': 1200   // Extended from 240s (20 min max)
+                };
+
+                const baseDuration = baseDurations[profile] || 240; // Fallback to 4min
+
+                // RAM-based adjustment if available
+                if (navigator.deviceMemory) {
+                    const ramGB = navigator.deviceMemory;
+                    // Normalize around 4GB baseline
+                    const ramMultiplier = Math.min(ramGB / 4, 3); // Cap at 3x (12GB+)
+                    const adjustedDuration = Math.round(baseDuration * ramMultiplier);
+
+                    // Ensure reasonable bounds (extended for 360p compression)
+                    return Math.max(60, Math.min(adjustedDuration, 1200)); // 1min to 20min
+                }
+
+                return Math.max(60, Math.min(baseDuration, 1200));
+            }
+
+            initializeRecordingLimits() {
+                try {
+                    const deviceProfile = this.detectDeviceProfile();
+                    const optimalDuration = this.getOptimalDurationForProfile(deviceProfile);
+
+                    // Apply the optimal duration (memory test will be done later if needed)
+                    this.maxRecordingDuration = optimalDuration;
+
+                    // Sessions should be shorter than max duration for rolling buffer efficiency
+                    // Use 30s max, or half the max duration, whichever is smaller
+                    this.sessionMaxDuration = Math.min(30, Math.floor(this.maxRecordingDuration / 2));
+
+                    // Ensure session duration is at least 10 seconds for usability
+                    this.sessionMaxDuration = Math.max(10, this.sessionMaxDuration);
+
+                    console.log(`Device profile detected: ${deviceProfile}`);
+                    console.log(`Optimal recording duration: ${optimalDuration}s`);
+                    console.log(`Session max duration: ${this.sessionMaxDuration}s`);
+
+                    // No UI controls to update (removed for cleaner interface)
+
+                    // Test memory in background (non-blocking)
+                    this.refineLimitsWithMemoryTest();
+
+                } catch (error) {
+                    console.warn('Failed to initialize dynamic recording limits, using defaults:', error);
+                    // Keep existing defaults (240s, 30s sessions)
+                    this.maxRecordingDuration = 240;
+                    this.sessionMaxDuration = 30;
+                }
+            }
+
+            async refineLimitsWithMemoryTest() {
+                try {
+                    // Test available memory to potentially increase duration
+                    const availableMB = await this.testAvailableMemory();
+                    const estimatedMBPerMinute = 25; // Conservative estimate for 360p VP9 (~25-40 MB/min)
+                    const maxDurationFromMemory = Math.floor((availableMB * 0.6) / estimatedMBPerMinute * 60); // 60% safety margin
+
+                    // Only increase duration if memory test suggests we can go higher
+                    if (maxDurationFromMemory > this.maxRecordingDuration) {
+                        const newDuration = Math.min(maxDurationFromMemory, 1200); // Cap at 20min
+
+                        console.log(`Memory test suggests higher limit: ${newDuration}s (was ${this.maxRecordingDuration}s)`);
+
+                        this.maxRecordingDuration = newDuration;
+                        // No UI controls to update (removed for cleaner interface)
+                    }
+
+                } catch (error) {
+                    console.warn('Memory testing failed, keeping profile-based limits:', error);
+                }
+            }
+
+            showMessage(message, type) {
+                this.errorMessage.style.display = 'none';
+                this.successMessage.style.display = 'none';
+                
+                if (type === 'error') {
+                    this.errorMessage.textContent = message;
+                    this.errorMessage.style.display = 'block';
+                } else {
+                    this.successMessage.textContent = message;
+                    this.successMessage.style.display = 'block';
+                }
+                
+                // Auto-hide after 3 seconds
+                setTimeout(() => {
+                    this.errorMessage.style.display = 'none';
+                    this.successMessage.style.display = 'none';
+                }, 3000);
+            }
+
+            // Timeline Methods (US-010)
+            handleTimelineClick(event) {
+                // Calculate click position as percentage of timeline width
+                const rect = this.timelineBar.getBoundingClientRect();
+                const clickX = event.clientX - rect.left;
+                const percentage = clickX / rect.width;
+
+                // Use centralized timeline window calculation
+                const timelineWindow = this.getTimelineWindow();
+                const startTime = timelineWindow.startTime;
+                const endTime = timelineWindow.endTime;
+
+                // targetTimestamp = absolute position within the displayed time window
+                const targetTimestampAbsolute = startTime + (percentage * (endTime - startTime));
+                const recordedDuration = this.getCurrentRecordingDuration();
+
+                // Convert to position relative to the start of available recorded content
+                // Use centralized calculation for consistency
+                const targetTimestampRelative = targetTimestampAbsolute - timelineWindow.availableContentStart;
+
+                console.log(`Timeline click: ${percentage * 100}% -> ${targetTimestampAbsolute}s absolute, ${targetTimestampRelative}s relative to recorded content (available: ${timelineWindow.availableContentStart}s-${timelineWindow.availableContentEnd}s, duration: ${recordedDuration}s)`);
+
+                if (targetTimestampRelative < 0 || targetTimestampRelative > recordedDuration) {
+                    // Click is outside recorded content
+                    this.showMessage('Cannot jump to unrecorded time', 'error');
+                    return;
+                }
+
+                // Always reconstruct current sessions state (important for rolling buffer)
+                // For recording case, we'll validate chunks first, then add to allSessions
+                const allSessions = [...this.recordedSessions];
+
+                if (this.isPlaying) {
+                    // During playback: jump to new position and continue playing from ALL available sessions
+                    // Not just the current playback sessions, but ALL recorded content
+                    const allAvailableSessions = [...this.recordedSessions];
+                    console.log(`*** TIMELINE CLICK DURING PLAYBACK ***`);
+                    console.log(`targetTimestampRelative: ${targetTimestampRelative}s`);
+                    console.log(`allAvailableSessions: ${allAvailableSessions.length} sessions`);
+                    console.log(`Calling playSessionsFromTimestamp with ${allAvailableSessions.length} sessions`);
+                    this.playSessionsFromTimestamp(allAvailableSessions, targetTimestampRelative);
+                    // Update allSessions for future navigation
+                    this.allSessions = allAvailableSessions;
+                } else if (this.isRecording) {
+                    // During recording: save current session, stop recording, then start flashback
+                    console.log('Timeline click during recording - saving current session before starting flashback');
+
+                    // Save current session synchronously (same logic as startFlashbackPlayback)
+                    if (this.currentSessionChunks.length > 0) {
+                        console.log(`Validating ${this.currentSessionChunks.length} chunks before saving...`);
+
+                        // Validate chunks
+                        const validChunks = this.currentSessionChunks.filter((chunk, index) => {
+                            if (!chunk) {
+                                console.warn(`Chunk ${index}: null/undefined chunk`);
+                                return false;
+                            }
+                            if (chunk.size === 0) {
+                                console.warn(`Chunk ${index}: empty chunk (0 bytes)`);
+                                return false;
+                            }
+                            if (!chunk.type || !chunk.type.includes('video/webm')) {
+                                console.warn(`Chunk ${index}: invalid type "${chunk.type}"`);
+                                return false;
+                            }
+                            return true;
+                        });
+
+                        console.log(`Found ${validChunks.length}/${this.currentSessionChunks.length} valid chunks`);
+
+                        if (validChunks.length > 0) {
+                            const currentSessionBlob = new Blob(validChunks, { type: 'video/webm' });
+                            console.log(`Blob created, size: ${currentSessionBlob.size} bytes`);
+
+                            // Validate blob
+                            const minBlobSize = 100000; // 100KB minimum for 360p video
+                            const sessionDuration = validChunks.length;
+                            const expectedMinSize = sessionDuration * 25000; // ~25KB/s for 360p compressed
+
+                            if (currentSessionBlob.size >= minBlobSize && currentSessionBlob.size >= expectedMinSize) {
+                                try {
+                                    const testUrl = URL.createObjectURL(currentSessionBlob);
+                                    console.log(`Blob URL created successfully`);
+                                    URL.revokeObjectURL(testUrl);
+
+                                    // Create session data
+                                    const sessionData = {
+                                        chunksData: [...validChunks],
+                                        blob: currentSessionBlob,
+                                        timestamp: Date.now(),
+                                        chunkCount: validChunks.length,
+                                        estimatedDuration: validChunks.length * 1.0
+                                    };
+
+                                    // Add to allSessions for immediate playback
+                                    allSessions.push(sessionData);
+
+                                    // Save to recordedSessions for future use
+                                    this.recordedSessions.push(sessionData);
+
+                                    console.log(`Session saved: ${validChunks.length} chunks, estimatedDuration: ${sessionData.estimatedDuration}s`);
+                                } catch (error) {
+                                    console.error('Failed to create valid blob URL:', error);
+                                }
+                            } else {
+                                console.warn(`Blob validation failed: size ${currentSessionBlob.size} < min(${minBlobSize}) or < expected(${expectedMinSize})`);
+                            }
+                        }
+
+                        // Clear current session chunks
+                        this.currentSessionChunks = [];
+                    }
+
+                    // Stop recording
+                    if (this.mediaRecorder && this.isRecording) {
+                        console.log('Stopping recording');
+                        this.mediaRecorder.stop();
+                        this.isRecording = false;
+                        this.stopTimer();
+                    }
+
+                    // Start flashback from clicked position
+                    this.playSessionsFromTimestamp(allSessions, targetTimestampRelative);
+                } else {
+                    // When stopped: start flashback from clicked position
+                    if (recordedDuration > 0) {
+                        this.playSessionsFromTimestamp(allSessions, targetTimestampRelative);
+                    } else {
+                        this.showMessage('No recording data available', 'error');
+                    }
+                }
+            }
+
+            getTotalAvailableDuration() {
+                // Return the maximum recording duration (what the timeline represents)
+                // This makes the timeline show the full possible recording time
+                return this.maxRecordingDuration;
+            }
+
+            getCurrentRecordingDuration() {
+                // Get total duration of all recorded content (completed sessions + current session)
+                // This represents how much of the maximum recording time has been used
+                let totalRecorded = 0;
+
+                // Add duration from completed sessions
+                this.recordedSessions.forEach(session => {
+                    totalRecorded += session.estimatedDuration;
+                });
+
+                // Add duration from current recording
+                if (this.currentSessionChunks.length > 0) {
+                    totalRecorded += this.currentSessionChunks.length * 1.0;
+                }
+
+                return totalRecorded;
+            }
+
+            updateTimeline() {
+                const totalDuration = this.getTotalAvailableDuration();
+
+                if (totalDuration === 0) {
+                    // No recordings yet - hide timeline
+                    this.timelineContainer.style.display = 'none';
+                    return;
+                }
+
+                // Show timeline
+                this.timelineContainer.style.display = 'block';
+
+                // Update time display
+                this.updateTimelineTimeDisplay(totalDuration);
+
+                // Update progress bar (recording progress)
+                this.updateTimelineProgress(totalDuration);
+
+                // Session markers removed for cleaner UI
+
+                // Update playback position indicator (during flashback)
+                this.updateTimelinePositionIndicator(totalDuration);
+            }
+
+            updateTimelineTimeDisplay(totalDuration) {
+                // Format time as MM:SS
+                const formatTime = (seconds) => {
+                    const mins = Math.floor(seconds / 60);
+                    const secs = Math.floor(seconds % 60);
+                    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                };
+
+                // Use centralized timeline window calculation
+                const timelineWindow = this.getTimelineWindow();
+                this.timelineStartTime.textContent = formatTime(timelineWindow.startTime);
+                this.timelineEndTime.textContent = formatTime(timelineWindow.endTime);
+
+                // Current time (playback position during flashback, or current recording time)
+                if (this.isPlaying && this.playbackVideo) {
+                    let currentPosition = 0;
+
+                    // Calculate current position in total timeline
+                    for (let i = 0; i < this.currentPlaybackIndex; i++) {
+                        currentPosition += this.allSessions[i].estimatedDuration;
+                    }
+                    currentPosition += this.playbackVideo.currentTime;
+
+                    // Add the start time of the displayed window to show absolute position
+                    const timelineWindow = this.getTimelineWindow();
+                    const absolutePosition = timelineWindow.startTime + currentPosition;
+
+                    this.timelineCurrentTime.textContent = formatTime(absolutePosition);
+                } else if (this.isRecording) {
+                    // Show current recording progress only if total recording time <= max
+                    // (otherwise it's redundant with the right-side time)
+                    if (this.totalEverRecordedSeconds <= this.maxRecordingDuration) {
+                        const currentRecordingTime = this.getCurrentRecordingDuration();
+                        this.timelineCurrentTime.textContent = formatTime(currentRecordingTime);
+                    } else {
+                        this.timelineCurrentTime.textContent = '';
+                    }
+                } else {
+                    this.timelineCurrentTime.textContent = '--:--';
+                }
+            }
+
+            updateTimelineProgress(totalDuration) {
+                // Show the progress relative to the displayed time window for visual consistency
+                const recordedDuration = this.getCurrentRecordingDuration();
+
+                // Use centralized timeline window calculation
+                const timelineWindow = this.getTimelineWindow();
+                const windowDuration = timelineWindow.endTime - timelineWindow.startTime;
+
+                // Progress relative to displayed window (capped at 100%)
+                const progressPercentage = Math.min((recordedDuration / windowDuration) * 100, 100);
+                this.timelineProgress.style.width = `${progressPercentage}%`;
+            }
+
+
+            updateTimelinePositionIndicator(totalDuration) {
+                if (this.isPlaying && this.playbackVideo && totalDuration > 0) {
+                    // Calculate current position in total timeline
+                    let currentPosition = 0;
+
+                    // Add durations of completed sessions
+                    for (let i = 0; i < this.currentPlaybackIndex; i++) {
+                        currentPosition += this.allSessions[i].estimatedDuration;
+                    }
+
+                    // Add current playback time
+                    currentPosition += this.playbackVideo.currentTime;
+
+                    // Use centralized timeline window calculation
+                    const timelineWindow = this.getTimelineWindow();
+                    const startTime = timelineWindow.startTime;
+                    const endTime = timelineWindow.endTime;
+
+                    // Position within the displayed window
+                    const positionInWindow = currentPosition - startTime;
+                    const windowDuration = endTime - startTime;
+
+                    // Convert to percentage of displayed window
+                    const percentage = windowDuration > 0 ? (positionInWindow / windowDuration) * 100 : 0;
+
+                    // Only show if within the displayed window
+                    if (percentage >= 0 && percentage <= 100) {
+                        this.timelinePosition.style.left = `${percentage}%`;
+                        this.timelinePosition.style.display = 'block';
+                    } else {
+                        this.timelinePosition.style.display = 'none';
+                    }
+                } else {
+                    // Hide position indicator when not playing
+                    this.timelinePosition.style.display = 'none';
+                }
+            }
+
+            // Override existing updateUI to include timeline updates
+            updateUI(state) {
+                switch (state) {
+                    case 'recording':
+                        this.startBtn.disabled = true;
+                        // Only enable back button if we have some recorded content
+                        this.backBtn.disabled = (this.recordedSessions.length === 0 && this.currentSessionChunks.length === 0);
+                        this.forwardBtn.disabled = true;
+                        this.stopBtn.style.display = 'none'; // Hide stop button during recording
+                        this.statusText.textContent = 'Recording...';
+                        this.recordingDot.style.display = 'block';
+                        this.videoOverlay.style.display = 'block';
+                        // Update timeline legend for recording state
+                        if (this.timelineLegendText) {
+                            this.timelineLegendText.textContent = '🟢 Green = available recording window | Click to flashback to any recorded moment';
+                        }
+                        break;
+                    case 'playing':
+                        this.startBtn.disabled = true;
+                        this.backBtn.disabled = false;
+                        this.forwardBtn.disabled = false;
+                        this.stopBtn.style.display = 'inline-block'; // Show stop button during flashback
+                        this.statusText.textContent = 'Playing flashback...';
+                        this.recordingDot.style.display = 'none';
+                        this.videoOverlay.style.display = 'none';
+                        // Update timeline legend for playback state
+                        if (this.timelineLegendText) {
+                            this.timelineLegendText.textContent = '🔴 Red line = current playback position | Click to jump to any moment in time';
+                        }
+                        break;
+                    case 'stopped':
+                        this.startBtn.disabled = false;
+                        this.backBtn.disabled = true;
+                        this.forwardBtn.disabled = true;
+                        this.stopBtn.style.display = 'none'; // Hide stop button when stopped
+                        this.statusText.textContent = 'Ready to record';
+                        this.recordingDot.style.display = 'none';
+                        this.videoOverlay.style.display = 'none';
+                        this.backPressCount = 0;
+                        this.forwardPressCount = 0;
+                        this.currentReferencePosition = null;
+                        this.updatePressCount();
+                        this.updateForwardCount();
+                        // Update timeline legend for stopped state
+                        if (this.timelineLegendText) {
+                            this.timelineLegendText.textContent = 'Timeline shows total recording time ever | Green bar = currently available content | Click to flashback';
+                        }
+                        break;
+                }
+
+                // Update timeline regardless of state
+                this.updateTimeline();
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new FlashbackRecorder();
+        });
+    </script>
+</body>
+</html>
+ng
