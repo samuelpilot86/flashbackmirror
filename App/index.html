@@ -770,10 +770,33 @@
                 // Synchroniser allSessions avec recordedSessions (contient la session sauvegardée si on était en recording)
                 this.allSessions = [...this.recordedSessions];
 
+                // DEBUG: Inspecter l'état des sessions avant calcul totalDuration
+                console.log('[DEBUG seekPlayback] Session state before totalDuration calc:', {
+                    recordedSessionsCount: this.recordedSessions.length,
+                    allSessionsCount: this.allSessions.length,
+                    recordedSessions: this.recordedSessions.map((s, i) => ({
+                        index: i,
+                        estimatedDuration: s.estimatedDuration,
+                        blobSize: s.blob ? s.blob.size : 'no blob',
+                        hasBlobUrl: !!s.blobUrl
+                    })),
+                    allSessions: this.allSessions.map((s, i) => ({
+                        index: i,
+                        estimatedDuration: s.estimatedDuration,
+                        blobSize: s.blob ? s.blob.size : 'no blob',
+                        hasBlobUrl: !!s.blobUrl
+                    })),
+                    currentSessionChunksCount: this.currentSessionChunks.length,
+                    totalRecordedTime: this.totalRecordedTime,
+                    state: this.state
+                });
+
                 // Validation du targetTime par rapport à la durée totale disponible
                 let totalDuration = this.allSessions.reduce((acc, s) => acc + s.estimatedDuration, 0); // Somme les durées de toutes les sessions
+                console.log(`[DEBUG seekPlayback] totalDuration calculation: ${totalDuration}s (from ${this.allSessions.length} sessions)`);
                 const validatedTargetTime = Math.max(0, Math.min(targetTime, totalDuration));
-
+                console.log(`totalDuration: ${validatedTargetTime}s, targetTime: ${targetTime}s`);
+                
                 if (validatedTargetTime !== targetTime) {
                     console.warn(`targetTime ${targetTime}s clamped to ${validatedTargetTime}s (totalDuration: ${totalDuration}s)`);
                 }
