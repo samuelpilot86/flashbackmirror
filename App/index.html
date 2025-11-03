@@ -761,9 +761,11 @@
                     }
                     this.stopTimer();
                     await this.waitForRecorderStop();
-                    this.saveCurrentSession();
-                    this.allSessions = [...this.recordedSessions];
+                    // Note: saveCurrentSession() est déjà appelée automatiquement dans mediaRecorder.onstop
                 }
+
+                // Synchroniser allSessions avec recordedSessions (contient la session sauvegardée si on était en recording)
+                this.allSessions = [...this.recordedSessions];
 
                 // Validation du targetTime par rapport à la durée totale disponible
                 let totalDuration = this.allSessions.reduce((acc, s) => acc + s.estimatedDuration, 0); // Somme les durées de toutes les sessions
@@ -788,7 +790,7 @@
                  */
             
                 // Calcul de la largeur effective de la barre verte (même logique que updateTimeline)
-                const effectiveBarWidthPercent = this.maxDuration > 0 ? Math.min((totalDuration / this.maxDuration) * 100, 100) : 100;
+                const effectiveBarWidthPercent = this.maxDuration > 0 ? Math.min((Implé / this.maxDuration) * 100, 100) : 100;
                 const effectiveBarWidthPx = (effectiveBarWidthPercent / 100) * rect.width;
 
                 // Convertir clickPercentOfTimeline en position x (pixels)
