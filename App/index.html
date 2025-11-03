@@ -388,9 +388,9 @@
         <div class="settings-panel">
             <div class="duration-control">
                 <label for="durationRange">Max Duration:</label>
-                <input type="range" id="durationRange" min="5" max="120" value="20">
-                <input type="number" id="durationValue" min="5" max="120" value="20">
-                <span id="durationDisplay">20s</span>
+                <input type="range" id="durationRange" min="5" max="120" value="10">
+                <input type="number" id="durationValue" min="5" max="120" value="10">
+                <span id="durationDisplay">10s</span>
             </div>
         </div>
     </div>
@@ -439,7 +439,7 @@
                 this.forwardResetTimer = null;
                 this.recordingStartTime = 0;
                 this.totalRecordedTime = 0;
-                this.maxDuration = 20; // seconds
+                this.maxDuration = 10; // seconds
                 this.sessionBoundaries = [];
                 this._pendingRevokes = [];
                 this.activeMimeType = null; // MimeType utilisé pour les blobs
@@ -598,7 +598,7 @@
                     this.currentSessionStartMs = Date.now();
 
                     this.updateUIForRecording();
-                    this.startTimer();
+                    this.startTimer(); // Démarrer le timer permettant l'actualisation régulière de la barre de progression
                     this.showMessage('Recording started', 'success');
                 } catch (err) {
                     console.error('Error accessing media devices:', err);
@@ -806,10 +806,18 @@
                     console.debug('[timeline] Click on gray area (beyond green bar), treating as 100%', { x, effectiveBarWidthPx });
                 }
 
-                // Calculer targetTime avec overflow (même logique pour recording et playback)
-                const overflow = Math.max(0, totalDuration - this.maxDuration);
-                const targetTime = (percent * this.maxDuration) + overflow;
-                console.log(`Timeline click: clickPercentOfTimeline=${clickPercentOfTimeline}, effectiveBarWidthPercent=${effectiveBarWidthPercent}%, effectiveBarWidthPx=${effectiveBarWidthPx}px, percent=${percent}, overflow=${overflow}s, totalDuration=${totalDuration}s, targetTime=${targetTime}s`);
+                // Calculer targetTime selon qu'il y ait overflow ou non
+                let targetTime;
+                if (totalDuration <= this.maxDuration) {
+                    // Pas d'overflow : la barre verte représente totalDuration secondes
+                    targetTime = percent * totalDuration;
+                } else {
+                    // Overflow : la barre verte représente les maxDuration dernières secondes
+                    const overflow = totalDuration - this.maxDuration;
+                    targetTime = (percent * this.maxDuration) + overflow;
+                }
+                const overflowForLog = Math.max(0, totalDuration - this.maxDuration);
+                console.log(`Timeline click: clickPercentOfTimeline=${clickPercentOfTimeline}, effectiveBarWidthPercent=${effectiveBarWidthPercent}%, effectiveBarWidthPx=${effectiveBarWidthPx}px, percent=${percent}, overflow=${overflowForLog}s, totalDuration=${totalDuration}s, targetTime=${targetTime}s`);
                 return targetTime;
             }
 
@@ -1259,13 +1267,14 @@
                      * Important : Les métadonnées (durée, dimensions, codecs) ne sont pas disponibles
                      * immédiatement après video.src = blobUrl. Il faut attendre cet événement.
                      */
-                    // Nettoyage initial : annuler timeout et retirer l'event listener
+                    
+                    // 0. Nettoyage initial : annuler timeout et retirer l'event listener
                     clearTimeout(metadataTimeout);
                     this.playbackVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
 
                     // 1. Validation durée réelle vs durée estimée lors de l'enregistrement
                     const actualVideoDuration = this.playbackVideo.duration || 0;
-                    const durationDiff = actualVideoDuration - session.estimatedDuration;
+                    const durationDiff = actualVideoDuration - session.estimatedDuration; // Différence entre la durée réelle et la durée estimée
                     console.debug('[play] Loaded metadata', {
                         index: this.currentPlaybackIndex,
                         seekTime,
@@ -1274,6 +1283,7 @@
                         durationDiff,
                         totalSessions: this.allSessions.length
                     });
+                    
                     // 2. Ajustement du seekTime pour éviter de dépasser la fin de la vidéo
                     const adjustedSeekTime = actualVideoDuration > 0 ? Math.min(seekTime, actualVideoDuration - 0.1) : seekTime;
                     if (adjustedSeekTime !== seekTime) {
@@ -1291,7 +1301,7 @@
                     // 4. Transition d'état vers 'playback' (synchronisation critique)
                     this.setState('playback');
                     this.updateUIForPlayback();
-                    this.startTimer();
+                    this.startTimer(); // Démarrer le timer pour la lecture
 
                     // 5. Initialisation des timers et gestionnaires d'événements
                     // Nettoyer les anciens gestionnaires
@@ -1480,7 +1490,7 @@
 
             // === FONCTIONS INTERRUPTION/FIN LECTURE + REPRISE ENREGISTREMENT ===
 
-            onSessionEnded() {
+            onSessionEnded() { 
                 console.debug('[play] Session ended', { endedIndex: this.currentPlaybackIndex, totalSessions: this.allSessions.length, allSessions: this.allSessions.map(s => ({ duration: s.estimatedDuration })) });
                 this.currentPlaybackIndex++;
                 console.debug('[play] After increment', { currentPlaybackIndex: this.currentPlaybackIndex, totalSessions: this.allSessions.length, willResume: this.currentPlaybackIndex >= this.allSessions.length });
