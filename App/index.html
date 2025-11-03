@@ -579,16 +579,19 @@
 
                     // Recréer le MediaRecorder si nécessaire (il a été arrêté lors du flashback)
                     if (!this.mediaRecorder || this.mediaRecorder.state === 'inactive') {
-                        this.mediaRecorder = new MediaRecorder(this.stream, options);
-                        this.mediaRecorder.ondataavailable = (event) => {
-                            if (event.data.size > 0) {
-                                this.currentSessionChunks.push(event.data);
-                            }
-                        };
+                    this.mediaRecorder = new MediaRecorder(this.stream, options);
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.currentSessionChunks.push(event.data);
+                        }
+                    };
 
-                        this.mediaRecorder.onstop = () => {
-                            console.log('MediaRecorder stopped');
-                        };
+                    this.mediaRecorder.onstop = () => {
+                        console.log('MediaRecorder stopped');
+                        if (this.state !== 'transitioning') {
+                            this.saveCurrentSession();
+                        }
+                    };
                     }
 
                     // Start recording with 1-second chunks
@@ -999,7 +1002,7 @@
                         if (inPlayback) {
                             this._pendingRevokes.push(removed.blobUrl);
                         } else {
-                            URL.revokeObjectURL(removed.blobUrl);
+                    URL.revokeObjectURL(removed.blobUrl);
                         }
                     }
                 }
@@ -1191,22 +1194,22 @@
                 this.playCurrentSession(0);
             }
 
-            waitForRecorderStop() {
-                return new Promise((resolve) => {
-                    if (!this.mediaRecorder) {
-                        resolve();
+            waitForRecorderStop() { // Attendre que le recorder s'arrête (ne fait rien d'autre qu'attendre que le recorder s'arrête)
+                return new Promise((resolve) => { 
+                    if (!this.mediaRecorder) { // Si le recorder n'existe pas, résoudre immédiatement
+                        resolve(); 
                         return;
                     }
-                    const state = this.mediaRecorder.state;
-                    if (state !== 'recording') {
+                    const state = this.mediaRecorder.state; // Vérifier l'état du recorder
+                    if (state !== 'recording') { // Si le recorder n'est pas en train d'enregistrer, résoudre immédiatement
                         resolve();
                         return;
                     }
                     const handler = () => {
-                        this.mediaRecorder.removeEventListener('stop', handler);
-                        resolve();
+                        this.mediaRecorder.removeEventListener('stop', handler); // Retirer le listener une fois qu'il a été appelé
+                        resolve(); // Résoudre la promesse
                     };
-                    this.mediaRecorder.addEventListener('stop', handler, { once: true });
+                    this.mediaRecorder.addEventListener('stop', handler, { once: true }); // Ajouter le listener une fois pour éviter les doublons
                 });
             }
 
@@ -1362,8 +1365,8 @@
                     this._playbackInterval = setInterval(() => {
                         if (this._endedFired) {
                             clearInterval(this._playbackInterval);
-                            return;
-                        }
+                    return;
+                }
                         const now = Date.now();
                         const currentVideoTime = this.playbackVideo.currentTime || 0;
                         const videoDuration = this.playbackVideo.duration || session.estimatedDuration;
@@ -1407,9 +1410,9 @@
                             });
                             clearInterval(this._playbackInterval);
                             onEnded();
-                            return;
-                        }
-                        
+                    return;
+                }
+
                         // Si on a atteint ou dépassé la durée estimée, forcer la fin (garde-fou)
                         if (currentVideoTime >= session.estimatedDuration - 0.1) {
                             console.debug('[play] Reached estimated duration - forcing session end', { 
