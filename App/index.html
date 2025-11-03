@@ -1245,38 +1245,38 @@
                     this.onSessionEnded();
                 }, 5000);
 
-                /**
-                 * Gestionnaire d'événement loadedmetadata - se déclenche quand les métadonnées vidéo sont chargées
-                 *
-                 * Rôles essentiels :
-                 * 1. Validation durée réelle vs durée estimée lors de l'enregistrement
-                 * 2. Ajustement du seekTime pour éviter de dépasser la fin de la vidéo
-                 * 3. Positionnement du curseur vidéo au bon timestamp
-                 * 4. Transition d'état vers 'playback' (synchronisation critique)
-                 * 5. Initialisation des timers et gestionnaires d'événements
-                 *
-                 * Important : Les métadonnées (durée, dimensions, codecs) ne sont pas disponibles
-                 * immédiatement après video.src = blobUrl. Il faut attendre cet événement.
-                 */
                 const onLoadedMetadata = () => {
-                    clearTimeout(metadataTimeout);
-                    this.playbackVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
+                    /**
+                     * Gestionnaire d'événement loadedmetadata - se déclenche quand les métadonnées vidéo sont chargées
+                     *
+                     * Rôles essentiels :
+                     * 1. Validation durée réelle vs durée estimée lors de l'enregistrement
+                     * 2. Ajustement du seekTime pour éviter de dépasser la fin de la vidéo
+                     * 3. Positionnement du curseur vidéo au bon timestamp
+                     * 4. Transition d'état vers 'playback' (synchronisation critique)
+                     * 5. Initialisation des timers et gestionnaires d'événements
+                     *
+                     * Important : Les métadonnées (durée, dimensions, codecs) ne sont pas disponibles
+                     * immédiatement après video.src = blobUrl. Il faut attendre cet événement.
+                     */
+                    // 1. Validation durée réelle vs durée estimée lors de l'enregistrement
                     const actualVideoDuration = this.playbackVideo.duration || 0;
                     const durationDiff = actualVideoDuration - session.estimatedDuration;
-                    console.debug('[play] Loaded metadata', { 
-                        index: this.currentPlaybackIndex, 
-                        seekTime, 
+                    console.debug('[play] Loaded metadata', {
+                        index: this.currentPlaybackIndex,
+                        seekTime,
                         sessionEstimatedDuration: session.estimatedDuration,
                         actualVideoDuration,
                         durationDiff,
-                        totalSessions: this.allSessions.length 
+                        totalSessions: this.allSessions.length
                     });
-                    // Ajuster seekTime si la durée réelle est différente de estimatedDuration
-                    // Si la vidéo réelle est plus courte, clamp seekTime à la durée réelle
+                    // 2. Ajustement du seekTime pour éviter de dépasser la fin de la vidéo
                     const adjustedSeekTime = actualVideoDuration > 0 ? Math.min(seekTime, actualVideoDuration - 0.1) : seekTime;
                     if (adjustedSeekTime !== seekTime) {
                         console.debug('[play] Adjusted seekTime due to duration mismatch', { original: seekTime, adjusted: adjustedSeekTime, actualDuration: actualVideoDuration, estimated: session.estimatedDuration });
                     }
+
+                    // 3. Positionnement du curseur vidéo au bon timestamp
                     try {
                         this.playbackVideo.currentTime = adjustedSeekTime;
                     } catch (e) {
@@ -1284,15 +1284,16 @@
                         this.playbackVideo.currentTime = 0;
                     }
 
+                    // 4. Transition d'état vers 'playback' (synchronisation critique)
                     this.setState('playback');
                     this.updateUIForPlayback();
                     this.startTimer();
 
-                    // Retirer l'ancien listener timeupdate s'il existe
+                    // 5. Initialisation des timers et gestionnaires d'événements
+                    // Nettoyer les anciens gestionnaires
                     if (this._timeupdateHandler) {
                         this.playbackVideo.removeEventListener('timeupdate', this._timeupdateHandler);
                     }
-                    // Nettoyer les timeouts précédents
                     if (this._playbackTimeout) {
                         clearTimeout(this._playbackTimeout);
                     }
