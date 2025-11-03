@@ -1169,6 +1169,8 @@
                         const seekTime = timestamp - accumulated;
                         console.debug('[play] From timestamp', { timestamp, chosenIndex: i, seekTime, sessionsCount: this.allSessions.length });
                         this.playCurrentSession(seekTime);
+                        // Note: Les sessions suivantes seront jouées automatiquement via onSessionEnded()
+                        // quand cette session se terminera
                         return;
                     }
                     accumulated = sessionEnd;
@@ -1218,7 +1220,7 @@
                 }
                 session.blobUrl = URL.createObjectURL(session.blob);
 
-                if (this.playbackVideo) {
+                if (this.playbackVideo) { // Si le video element existe déjà, le réinitialiser
                     this.playbackVideo.pause();
                     this.playbackVideo.removeEventListener('ended', this.onSessionEnded);
                     this.videoPreview.srcObject = null;
@@ -1226,14 +1228,14 @@
 
                 // Toujours détacher le flux caméra avant d'attacher une source vidéo
                 this.videoPreview.srcObject = null;
-                this.playbackVideo = this.videoPreview;
-                this.playbackVideo.src = session.blobUrl;
-                try {
-                    this.playbackVideo.load();
+                this.playbackVideo = this.videoPreview; // Attacher le nouveau video element
+                this.playbackVideo.src = session.blobUrl; // Attacher la nouvelle blob URL
+                try { // Charger la nouvelle vidéo
+                    this.playbackVideo.load(); 
                 } catch (e) {
                     console.warn('video.load() failed', e);
                 }
-                this.playbackVideo.muted = false;
+                this.playbackVideo.muted = false; // Active le son
 
                 // Timeout pour détecter si loadedmetadata ne se déclenche jamais
                 const metadataTimeout = setTimeout(() => {
@@ -1243,6 +1245,19 @@
                     this.onSessionEnded();
                 }, 5000);
 
+                /**
+                 * Gestionnaire d'événement loadedmetadata - se déclenche quand les métadonnées vidéo sont chargées
+                 *
+                 * Rôles essentiels :
+                 * 1. Validation durée réelle vs durée estimée lors de l'enregistrement
+                 * 2. Ajustement du seekTime pour éviter de dépasser la fin de la vidéo
+                 * 3. Positionnement du curseur vidéo au bon timestamp
+                 * 4. Transition d'état vers 'playback' (synchronisation critique)
+                 * 5. Initialisation des timers et gestionnaires d'événements
+                 *
+                 * Important : Les métadonnées (durée, dimensions, codecs) ne sont pas disponibles
+                 * immédiatement après video.src = blobUrl. Il faut attendre cet événement.
+                 */
                 const onLoadedMetadata = () => {
                     clearTimeout(metadataTimeout);
                     this.playbackVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
