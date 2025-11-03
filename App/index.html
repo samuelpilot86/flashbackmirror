@@ -764,7 +764,8 @@
                     }
                     this.stopTimer();
                     await this.waitForRecorderStop();
-                    // Note: saveCurrentSession() est déjà appelée automatiquement dans mediaRecorder.onstop
+                    // Sauvegarde manuelle nécessaire car onstop ne la fait pas en état 'transitioning'
+                    this.saveCurrentSession();
                 }
 
                 // Synchroniser allSessions avec recordedSessions (contient la session sauvegardée si on était en recording)
