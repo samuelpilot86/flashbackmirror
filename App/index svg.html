@@ -587,8 +587,6 @@
                 }
             }
 
-            // === FONCTIONS ARRÊT ENREGISTREMENT ===
-
             stopRecording() {
                 if (this.mediaRecorder && this.state === 'recording') {
                     this.mediaRecorder.stop();
@@ -610,12 +608,6 @@
                 }
             }
 
-            // === GESTION DES FLASHBACKS ===
-
-            handleBackKey() {
-                this.handleFlashback();
-            }
-
             handleFlashback() {
                 if (this.state !== 'playback' && this.state !== 'recording' && this.state !== 'stopped') return; // le flashback peut être demandé lorsque l'enregistrement est arrêté
                 const flashbackDuration = Math.pow(2, this.backPressCount);
@@ -623,92 +615,15 @@
                 this.incrementBackCounter();
             }
 
-            incrementBackCounter() {
-                this.backPressCount++;
-                this.updateCounterDisplay();
-                clearTimeout(this.backResetTimer);
-                this.backResetTimer = setTimeout(() => {
-                    this.backPressCount = 0;
-                    this.updateCounterDisplay();
-                }, 500);
+            handleForward() {
+                if (this.state !== 'playback') return;
+                const forwardDuration = Math.pow(2, this.forwardPressCount);
+                this.advancePlayback(forwardDuration);
+                this.incrementForwardCounter();
             }
 
-            async startFlashbackPlayback(flashbackDuration, targetTime = null) {
-                console.log(`=== STARTING FLASHBACK PLAYBACK ===`);
-                console.log(`Input: flashbackDuration=${flashbackDuration}s, targetTime=${targetTime}s`);
-                console.log(`[flashback] BEFORE: recordedSessions=${this.recordedSessions.length}, totalRecordedTime=${this.totalRecordedTime}, currentChunks=${this.currentSessionChunks.length}`);
-
-                // Vérification des données disponibles
-                if (this.recordedSessions.length === 0 && this.currentSessionChunks.length === 0) {
-                    console.log(`ERROR: No recording data available`);
-                    this.showMessage('No recording data available for playback', 'error');
-                    return;
-                }
-
-                // Calcul du startTimestamp selon le mode
-                let startTimestamp;
-                if (targetTime !== null) {
-                    // Mode direct : targetTime fourni (utilisé par handleTimelineClick)
-                    startTimestamp = Math.max(0, targetTime);
-                    console.log(`[flashback] Using targetTime directly: startTimestamp=${startTimestamp}s`);
-                } else {
-                    // Mode flashback : calcul basé sur flashbackDuration (utilisé par handleFlashback)
-                    // Calcul de la durée totale actuelle (incluant session en cours si recording)
-                    let totalDuration = this.totalRecordedTime;
-                    if (this.state === 'recording' && this.currentSessionStartMs) {
-                        const elapsed = Math.floor((Date.now() - this.currentSessionStartMs) / 1000);
-                        totalDuration += elapsed;
-                    }
-
-                    console.log(`Using reference position (current recording time): ${totalDuration}s`);
-                    if (totalDuration < flashbackDuration) {
-                        console.log(`Not enough data, playing from start`);
-                        this.showMessage(`Playing from beginning`, 'success');
-                        // Pour le flashback avec peu de données, on doit quand même gérer l'arrêt d'enregistrement
-                        await this.playFromTimestamp(0);
-                        return;
-                    }
-                    startTimestamp = Math.max(0, totalDuration - flashbackDuration);
-                    console.log(`[flashback] Calculated start timestamp: referencePosition=${totalDuration}s, flashbackDuration=${flashbackDuration}s, startTimestamp=${startTimestamp}s`);
-                }
-
-                console.log(`Starting playback at ${startTimestamp}s`);
-                this.currentReferencePosition = startTimestamp;
-
-                // Déléguer l'arrêt d'enregistrement et le lancement de lecture à playFromTimestamp
-                await this.playFromTimestamp(startTimestamp);
-            }
-
-            /**
-             * Calcule le timestamp cible en fonction de la position du clic sur la timeline.
-             * Utilise la même logique pour recording et playback : calcul par rapport à la largeur effective
-             * de la barre verte avec gestion de l'overflow.
-             */
-            calculateTargetTime(clickPercentOfTimeline, rect, totalDuration) {
-                // Calcul de la largeur effective de la barre verte (même logique que updateTimeline)
-                const effectiveBarWidthPercent = this.maxDuration > 0 ? Math.min((totalDuration / this.maxDuration) * 100, 100) : 100;
-                const effectiveBarWidthPx = (effectiveBarWidthPercent / 100) * rect.width;
-
-                // Convertir clickPercentOfTimeline en position x (pixels)
-                const x = clickPercentOfTimeline * rect.width;
-
-                // Calculer percent relatif à la largeur effective
-                let percent;
-                if (x <= effectiveBarWidthPx) {
-                    // Clic sur la barre verte : calculer par rapport à la barre verte
-                    percent = effectiveBarWidthPx > 0 ? x / effectiveBarWidthPx : 0;
-                    console.debug('[timeline] Click on green bar', { x, effectiveBarWidthPx, effectiveBarWidthPercent, percent });
-                } else {
-                    // Clic sur partie grise : traiter comme 100% de la barre verte
-                    percent = 1.0;
-                    console.debug('[timeline] Click on gray area (beyond green bar), treating as 100%', { x, effectiveBarWidthPx });
-                }
-
-                // Calculer targetTime avec overflow (même logique pour recording et playback)
-                const overflow = Math.max(0, totalDuration - this.maxDuration);
-                const targetTime = (percent * this.maxDuration) + overflow;
-                console.log(`Timeline click: clickPercentOfTimeline=${clickPercentOfTimeline}, effectiveBarWidthPercent=${effectiveBarWidthPercent}%, effectiveBarWidthPx=${effectiveBarWidthPx}px, percent=${percent}, overflow=${overflow}s, totalDuration=${totalDuration}s, targetTime=${targetTime}s`);
-                return targetTime;
+            handleBackKey() {
+                this.handleFlashback();
             }
 
             handleForwardKey() {
@@ -1006,6 +921,83 @@
                 }
             }
 
+            /**
+             * Calcule le timestamp cible en fonction de la position du clic sur la timeline.
+             * Utilise la même logique pour recording et playback : calcul par rapport à la largeur effective
+             * de la barre verte avec gestion de l'overflow.
+             */
+            calculateTargetTime(clickPercentOfTimeline, rect, totalDuration) {
+                // Calcul de la largeur effective de la barre verte (même logique que updateTimeline)
+                const effectiveBarWidthPercent = this.maxDuration > 0 ? Math.min((totalDuration / this.maxDuration) * 100, 100) : 100;
+                const effectiveBarWidthPx = (effectiveBarWidthPercent / 100) * rect.width;
+
+                // Convertir clickPercentOfTimeline en position x (pixels)
+                const x = clickPercentOfTimeline * rect.width;
+
+                // Calculer percent relatif à la largeur effective
+                let percent;
+                if (x <= effectiveBarWidthPx) {
+                    // Clic sur la barre verte : calculer par rapport à la barre verte
+                    percent = effectiveBarWidthPx > 0 ? x / effectiveBarWidthPx : 0;
+                    console.debug('[timeline] Click on green bar', { x, effectiveBarWidthPx, effectiveBarWidthPercent, percent });
+                } else {
+                    // Clic sur partie grise : traiter comme 100% de la barre verte
+                    percent = 1.0;
+                    console.debug('[timeline] Click on gray area (beyond green bar), treating as 100%', { x, effectiveBarWidthPx });
+                }
+
+                // Calculer targetTime avec overflow (même logique pour recording et playback)
+                const overflow = Math.max(0, totalDuration - this.maxDuration);
+                const targetTime = (percent * this.maxDuration) + overflow;
+                console.log(`Timeline click: clickPercentOfTimeline=${clickPercentOfTimeline}, effectiveBarWidthPercent=${effectiveBarWidthPercent}%, effectiveBarWidthPx=${effectiveBarWidthPx}px, percent=${percent}, overflow=${overflow}s, totalDuration=${totalDuration}s, targetTime=${targetTime}s`);
+                return targetTime;
+            }
+
+            async startFlashbackPlayback(flashbackDuration, targetTime = null) {
+                console.log(`=== STARTING FLASHBACK PLAYBACK ===`);
+                console.log(`Input: flashbackDuration=${flashbackDuration}s, targetTime=${targetTime}s`);
+                console.log(`[flashback] BEFORE: recordedSessions=${this.recordedSessions.length}, totalRecordedTime=${this.totalRecordedTime}, currentChunks=${this.currentSessionChunks.length}`);
+
+                // Vérification des données disponibles
+                if (this.recordedSessions.length === 0 && this.currentSessionChunks.length === 0) {
+                    console.log(`ERROR: No recording data available`);
+                    this.showMessage('No recording data available for playback', 'error');
+                    return;
+                }
+
+                // Calcul du startTimestamp selon le mode
+                let startTimestamp;
+                if (targetTime !== null) {
+                    // Mode direct : targetTime fourni (utilisé par handleTimelineClick)
+                    startTimestamp = Math.max(0, targetTime);
+                    console.log(`[flashback] Using targetTime directly: startTimestamp=${startTimestamp}s`);
+                } else {
+                    // Mode flashback : calcul basé sur flashbackDuration (utilisé par handleFlashback)
+                    // Calcul de la durée totale actuelle (incluant session en cours si recording)
+                    let totalDuration = this.totalRecordedTime;
+                    if (this.state === 'recording' && this.currentSessionStartMs) {
+                        const elapsed = Math.floor((Date.now() - this.currentSessionStartMs) / 1000);
+                        totalDuration += elapsed;
+                    }
+
+                    console.log(`Using reference position (current recording time): ${totalDuration}s`);
+                    if (totalDuration < flashbackDuration) {
+                        console.log(`Not enough data, playing from start`);
+                        this.showMessage(`Playing from beginning`, 'success');
+                        // Pour le flashback avec peu de données, on doit quand même gérer l'arrêt d'enregistrement
+                        await this.playFromTimestamp(0);
+                        return;
+                    }
+                    startTimestamp = Math.max(0, totalDuration - flashbackDuration);
+                    console.log(`[flashback] Calculated start timestamp: referencePosition=${totalDuration}s, flashbackDuration=${flashbackDuration}s, startTimestamp=${startTimestamp}s`);
+                }
+
+                console.log(`Starting playback at ${startTimestamp}s`);
+                this.currentReferencePosition = startTimestamp;
+
+                // Déléguer l'arrêt d'enregistrement et le lancement de lecture à playFromTimestamp
+                await this.playFromTimestamp(startTimestamp);
+            }
 
             /**
              * Gère l'arrêt d'enregistrement si nécessaire, puis lance la lecture à partir du timestamp donné.
@@ -1037,8 +1029,6 @@
                 // Lancement unifié
                 this.playFromTimestamp(targetTime);
             }
-
-            // === FONCTIONS COMMUNES DE LECTURE ===
 
             async playFromTimestamp(timestamp) {
                 // Étape 1: Gérer l'arrêt d'enregistrement si nécessaire
@@ -1384,8 +1374,6 @@
                 this.playbackVideo.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
                 this.playbackVideo.addEventListener('error', onError, { once: true });
             }
-
-            // === FONCTIONS INTERRUPTION/FIN LECTURE + REPRISE ENREGISTREMENT ===
 
             onSessionEnded() {
                 console.debug('[play] Session ended', { endedIndex: this.currentPlaybackIndex, totalSessions: this.allSessions.length, allSessions: this.allSessions.map(s => ({ duration: s.estimatedDuration })) });
