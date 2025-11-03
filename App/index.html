@@ -1259,6 +1259,10 @@
                      * Important : Les métadonnées (durée, dimensions, codecs) ne sont pas disponibles
                      * immédiatement après video.src = blobUrl. Il faut attendre cet événement.
                      */
+                    // Nettoyage initial : annuler timeout et retirer l'event listener
+                    clearTimeout(metadataTimeout);
+                    this.playbackVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
+
                     // 1. Validation durée réelle vs durée estimée lors de l'enregistrement
                     const actualVideoDuration = this.playbackVideo.duration || 0;
                     const durationDiff = actualVideoDuration - session.estimatedDuration;
