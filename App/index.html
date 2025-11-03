@@ -675,26 +675,52 @@
                 this.incrementBackCounter();
             }
 
-            handleForward() {
+            async handleForward() {
                 if (this.state !== 'playback') return;
+
+                // Calculer la position cible (similaire à handleBack)
                 const forwardDuration = this.calculateSeekDuration(this.forwardPressCount);
-                this.advancePlayback(forwardDuration);
+                let currentTotalTime = 0;
+                for (let i = 0; i < this.currentPlaybackIndex; i++) {
+                    currentTotalTime += this.allSessions[i].estimatedDuration;
+                }
+                currentTotalTime += this.playbackVideo.currentTime;
+
+                const targetTime = currentTotalTime + forwardDuration;
+                const totalDuration = this.allSessions.reduce((acc, s) => acc + s.estimatedDuration, 0);
+
+                console.log(`Forward: current=${currentTotalTime}s + duration=${forwardDuration}s = target=${targetTime}s (total=${totalDuration}s)`);
+
+                // Vérification si on dépasse la fin (comme advancePlayback)
+                if (targetTime >= totalDuration) {
+                    console.log(`Advanced beyond end - resuming recording`);
+                    this.showMessage('End of recording reached - resuming live recording', 'success');
+                    this.resumeRecordingAfterPlayback();
+                    return;
+                }
+
+                // Déléguer à seekPlayback (comme handleBack)
+                await this.seekPlayback(targetTime, {
+                    allowFromRecording: false,
+                    allowFromStopped: false
+                });
+
                 this.incrementForwardCounter();
             }
 
+            calculateSeekDuration(pressCount) {
             /**
              * Calcule la durée d'un flashback/avance basée sur le nombre d'appuis successifs.
              * Utilise une progression exponentielle (1, 2, 4, 8, 16... secondes).
              */
-            calculateSeekDuration(pressCount) {
                 return Math.pow(2, pressCount);
             }
 
+            async seekPlayback(targetTime, options = {}) {
             /**
              * Fonction commune pour rechercher une position dans la lecture.
              * Gère la validation, l'arrêt d'enregistrement conditionnel, et le lancement de lecture.
              */
-            async seekPlayback(targetTime, options = {}) {
                 const {
                     allowFromRecording = false,  // Permettre l'appel depuis 'recording'
                     allowFromStopped = false     // Permettre l'appel depuis 'stopped'
@@ -726,7 +752,7 @@
 
                 // Arrêt d'enregistrement si nécessaire et autorisé
                 if (this.state === 'recording' && allowFromRecording) {
-                    console.log('Stopping current recording for seek operation');
+                    console.log('Stopping current recording for seekPlayback operation');
                     this.setState('transitioning');
                     try {
                         this.mediaRecorder.stop();
@@ -740,49 +766,18 @@
                 }
 
                 // Validation du targetTime par rapport à la durée totale disponible
-                let totalDuration = this.allSessions.reduce((acc, s) => acc + s.estimatedDuration, 0);
+                let totalDuration = this.allSessions.reduce((acc, s) => acc + s.estimatedDuration, 0); // Somme les durées de toutes les sessions
                 const validatedTargetTime = Math.max(0, Math.min(targetTime, totalDuration));
 
                 if (validatedTargetTime !== targetTime) {
                     console.warn(`targetTime ${targetTime}s clamped to ${validatedTargetTime}s (totalDuration: ${totalDuration}s)`);
                 }
 
-                console.log(`Seeking to validated time: ${validatedTargetTime}s`);
+                console.log(`Seeking flashback to validated time: ${validatedTargetTime}s`);
                 this.currentReferencePosition = validatedTargetTime;
 
                 // Lancement de la lecture
-                this.playSessionsFromTimestamp(this.allSessions, validatedTargetTime);
-            }
-
-            advancePlayback(forwardDuration) {
-                console.log(`=== ADVANCING PLAYBACK ===`);
-                console.log(`Forward duration: ${forwardDuration}s`);
-
-                // Calcul de la position actuelle
-                let currentTotalTime = 0;
-                for (let i = 0; i < this.currentPlaybackIndex; i++) {
-                    currentTotalTime += this.allSessions[i].estimatedDuration;
-                }
-                currentTotalTime += this.playbackVideo.currentTime;
-
-                const newTotalTime = currentTotalTime + forwardDuration;
-                const totalDuration = this.allSessions.reduce((acc, s) => acc + s.estimatedDuration, 0);
-
-                console.log(`Current time: ${currentTotalTime}s, new time: ${newTotalTime}s, total duration: ${totalDuration}s`);
-
-                // Vérification si on dépasse la fin
-                if (newTotalTime >= totalDuration) {
-                    console.log(`Advanced beyond end - resuming recording`);
-                    this.showMessage('End of recording reached - resuming live recording', 'success');
-                    this.resumeRecordingAfterPlayback();
-                    return;
-                }
-
-                // Délégation à la fonction commune (seulement depuis playback)
-                this.seekPlayback(newTotalTime, {
-                    allowFromRecording: false,
-                    allowFromStopped: false
-                });
+                this.playSessionsFromTimestamp(validatedTargetTime);
             }
 
             calculateTargetTime(clickPercentOfTimeline, rect, totalDuration) {
@@ -1162,45 +1157,24 @@
                 }
 
                 // Étape 2: Lancer la lecture
-                this.playSessionsFromTimestamp(this.allSessions, timestamp);
+                this.playSessionsFromTimestamp(timestamp);
             }
 
-            playSessionsFromTimestamp(sessions, timestamp) {
-                this.allSessions = sessions;
+            playSessionsFromTimestamp(timestamp) {
                 let accumulated = 0;
-                for (let i = 0; i < sessions.length; i++) {
-                    const sessionEnd = accumulated + sessions[i].estimatedDuration;
+                for (let i = 0; i < this.allSessions.length; i++) {
+                    const sessionEnd = accumulated + this.allSessions[i].estimatedDuration;
                     if (timestamp < sessionEnd) {
                         this.currentPlaybackIndex = i;
                         const seekTime = timestamp - accumulated;
-                        console.debug('[play] From timestamp', { timestamp, chosenIndex: i, seekTime, sessionsCount: sessions.length });
+                        console.debug('[play] From timestamp', { timestamp, chosenIndex: i, seekTime, sessionsCount: this.allSessions.length });
                         this.playCurrentSession(seekTime);
                         return;
                     }
                     accumulated = sessionEnd;
                 }
                 // If beyond last session, play last one
-                this.currentPlaybackIndex = sessions.length - 1;
-                console.debug('[play] Timestamp beyond last session, defaulting to last', { index: this.currentPlaybackIndex });
-                this.playCurrentSession(0);
-            }
-
-            playSessionsFromTimestamp(sessions, timestamp) {
-                this.allSessions = sessions;
-                let accumulated = 0;
-                for (let i = 0; i < sessions.length; i++) {
-                    const sessionEnd = accumulated + sessions[i].estimatedDuration;
-                    if (timestamp < sessionEnd) {
-                        this.currentPlaybackIndex = i;
-                        const seekTime = timestamp - accumulated;
-                        console.debug('[play] From timestamp', { timestamp, chosenIndex: i, seekTime, sessionsCount: sessions.length });
-                        this.playCurrentSession(seekTime);
-                        return;
-                    }
-                    accumulated = sessionEnd;
-                }
-                // If beyond last session, play last one
-                this.currentPlaybackIndex = sessions.length - 1;
+                this.currentPlaybackIndex = this.allSessions.length - 1;
                 console.debug('[play] Timestamp beyond last session, defaulting to last', { index: this.currentPlaybackIndex });
                 this.playCurrentSession(0);
             }
