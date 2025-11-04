@@ -649,7 +649,7 @@
             // === GESTION DES FLASHBACKS ===
 
             async handleBack() {
-                if (this.state !== 'playback' && this.state !== 'recording' && this.state !== 'stopped') return; // le flashback peut être demandé lorsque l'enregistrement est arrêté
+                // Permettre les flashbacks même pendant 'transitioning' pour contrôle immédiat
 
                 // Calculer directement le targetTime
                 const backDuration = this.calculateSeekDuration(this.backPressCount);
@@ -679,7 +679,7 @@
             }
 
             async handleForward() {
-                if (this.state !== 'playback') return;
+                // Permettre les forwards même pendant 'transitioning' pour contrôle immédiat
 
                 // Calculer la position cible (similaire à handleBack)
                 const forwardDuration = this.calculateSeekDuration(this.forwardPressCount);
@@ -734,8 +734,8 @@
 
                 // Validation d'état
                 if (this.state === 'transitioning') {
-                    console.log('Seek ignored: transitioning');
-                    return;
+                    console.log('Interrupting current transition for new seek');
+                    // Permettre l'interruption pour contrôle utilisateur immédiat
                 }
                 if (this.state !== 'playback' && !allowFromRecording && !allowFromStopped) {
                     console.log(`Seek ignored: invalid state ${this.state}`);
@@ -796,7 +796,7 @@
                 let totalDuration = this.allSessions.reduce((acc, s) => acc + s.estimatedDuration, 0); // Somme les durées de toutes les sessions
                 console.log(`[DEBUG seekPlayback] totalDuration calculation: ${totalDuration}s (from ${this.allSessions.length} sessions)`);
                 const validatedTargetTime = Math.max(0, Math.min(targetTime, totalDuration));
-                console.log(`totalDuration: ${validatedTargetTime}s, targetTime: ${targetTime}s`);
+                console.log(`totalDuration: ${totalDuration}s, targetTime: ${targetTime}s`);
                 
                 if (validatedTargetTime !== targetTime) {
                     console.warn(`targetTime ${targetTime}s clamped to ${validatedTargetTime}s (totalDuration: ${totalDuration}s)`);
