@@ -649,14 +649,16 @@
             // === GESTION DES FLASHBACKS ===
 
             async handleBack() {
-                console.log(`[${new Date().toISOString()}] BACK BUTTON PRESSED`);
+                console.log(`[${new Date().toISOString()}] BACK BUTTON PRESSED - backPressCount before: ${this.backPressCount}`);
                 // Permettre les flashbacks même pendant 'transitioning' pour contrôle immédiat
 
                 // Incrémenter le compteur dès le début pour éviter les courses de conditions
                 this.incrementBackCounter();
+                console.log(`[${new Date().toISOString()}] BACK BUTTON PRESSED - backPressCount after increment: ${this.backPressCount}`);
 
                 // Calculer directement le targetTime
                 const backDuration = this.calculateSeekDuration(this.backPressCount);
+                console.log(`[${new Date().toISOString()}] BACK BUTTON PRESSED - backDuration calculated: ${backDuration}s`);
                 let totalDuration = this.totalRecordedTime;
                 if (this.state === 'recording' && this.currentSessionStartMs) {
                     const elapsed = Math.floor((Date.now() - this.currentSessionStartMs) / 1000);
@@ -854,10 +856,13 @@
             }
 
             incrementBackCounter() {
+                console.log(`[${new Date().toISOString()}] incrementBackCounter - before: ${this.backPressCount}`);
                 this.backPressCount++;
+                console.log(`[${new Date().toISOString()}] incrementBackCounter - after: ${this.backPressCount}`);
                 this.updateCounterDisplay();
                 clearTimeout(this.backResetTimer);
                 this.backResetTimer = setTimeout(() => {
+                    console.log(`[${new Date().toISOString()}] backPressCount reset to 0`);
                     this.backPressCount = 0;
                     this.updateCounterDisplay();
                 }, 500);
