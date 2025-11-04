@@ -440,6 +440,7 @@
                 this.recordingStartTime = 0;
                 this.totalRecordedTime = 0;
                 this.maxDuration = 10; // seconds
+                this.sessionBoundaries = [];
                 this._pendingRevokes = [];
                 this.activeMimeType = null; // MimeType utilisé pour les blobs
 
@@ -456,93 +457,6 @@
                 this.updateDurationDisplay();
                 this.setState('recording');
                 this.startRecording(); // Auto-start as per US-001
-            }
-
-            // === CLASSES UTILITAIRES ===
-
-            // Classe Session pour encapsuler la logique des sessions vidéo
-            class Session {
-                constructor(startTime, estimatedDuration, blob) {
-                    if (estimatedDuration <= 0) {
-                        throw new Error("Session duration must be positive");
-                    }
-                    if (!blob || !(blob instanceof Blob)) {
-                        throw new Error("Session must have a valid blob");
-                    }
-
-                    this.startTime = startTime;
-                    this.estimatedDuration = estimatedDuration;
-                    this.blob = blob;
-                    this.blobUrl = null;
-                }
-
-                // Calculer endTime à la demande (évite la redondance)
-                getEndTime() {
-                    return this.startTime + this.estimatedDuration;
-                }
-
-                // Ajuster les temps lors du rolling buffer
-                adjustTimes(offset) {
-                    this.startTime += offset;
-                    // Validation que le temps reste cohérent
-                    if (this.startTime < 0) {
-                        this.startTime = 0; // Clamp à 0 minimum
-                    }
-                }
-
-                // Gestion centralisée du blob URL
-                setBlobUrl(url) {
-                    if (this.blobUrl && this.blobUrl !== url) {
-                        URL.revokeObjectURL(this.blobUrl);
-                    }
-                    this.blobUrl = url;
-                }
-
-                // Nettoyer les ressources
-                destroy() {
-                    if (this.blobUrl) {
-                        URL.revokeObjectURL(this.blobUrl);
-                        this.blobUrl = null;
-                    }
-                    this.blob = null;
-                }
-
-                // Validation de l'état
-                isValid() {
-                    return this.blob && this.estimatedDuration > 0 && this.startTime >= 0;
-                }
-            }
-
-            // === MÉTHODES UTILITAIRES ===
-
-            // Méthode unifiée pour calculer la durée totale selon le contexte
-            getTotalDuration(options = {}) {
-                const {
-                    includeCurrentSession = false,
-                    useRecordedSessions = false
-                } = options;
-
-                // Choisir la source des sessions
-                const sessions = useRecordedSessions ? this.recordedSessions : this.allSessions;
-
-                // Calculer la somme des durées des sessions sauvegardées
-                let duration = sessions.reduce((sum, session) => sum + session.estimatedDuration, 0);
-
-                // Ajouter la session courante si demandé et si on est en enregistrement
-                if (includeCurrentSession && this.state === 'recording' && this.currentSessionStartMs) {
-                    const elapsed = Math.floor((Date.now() - this.currentSessionStartMs) / 1000);
-                    duration += elapsed;
-                }
-
-                // Toujours clamper à maxDuration pour éviter les dépassements
-                return Math.min(duration, this.maxDuration);
-            }
-
-            // Validation centralisée des targetTime
-            validateTargetTime(targetTime, context = 'playback') {
-                const includeCurrent = context === 'recording';
-                const maxDuration = this.getTotalDuration({ includeCurrentSession: includeCurrent });
-                return Math.max(0, Math.min(targetTime, maxDuration));
             }
 
             setState(newState) {
@@ -742,16 +656,23 @@
                 this.incrementBackCounter();
                 // console.log(`[${new Date().toISOString()}] BACK BUTTON PRESSED - backPressCount after increment: ${this.backPressCount}`);
 
-                // Calculer le targetTime en utilisant les nouvelles méthodes unifiées
+                // Calculer directement le targetTime
                 const backDuration = this.calculateSeekDuration(this.backPressCount);
-                const totalDuration = this.getTotalDuration({ includeCurrentSession: true });
+                // console.log(`[${new Date().toISOString()}] BACK BUTTON PRESSED - backDuration calculated: ${backDuration}s`);
+                let totalDuration = this.totalRecordedTime;
+                if (this.state === 'recording' && this.currentSessionStartMs) {
+                    const elapsed = Math.floor((Date.now() - this.currentSessionStartMs) / 1000);
+                    totalDuration += elapsed;
+                }
 
                 let targetTime;
                 if (totalDuration < backDuration) {
+                    // console.log(`Not enough data, playing from start`);
                     this.showMessage(`Playing from beginning`, 'success');
                     targetTime = 0;
                 } else {
-                    targetTime = this.validateTargetTime(totalDuration - backDuration, 'recording');
+                    targetTime = Math.max(0, totalDuration - backDuration);
+                    // console.log(`Calculated target time: ${totalDuration}s - ${backDuration}s = ${targetTime}s`);
                 }
 
                 // Appeler directement seekPlayback
@@ -776,9 +697,11 @@
                 currentTotalTime += this.playbackVideo.currentTime;
 
                 const targetTime = currentTotalTime + forwardDuration;
-                const totalDuration = this.getTotalDuration({useRecordedSessions: false}); // allSessions
+                const totalDuration = this.allSessions.reduce((acc, s) => acc + s.estimatedDuration, 0);
 
-                // Vérification si on dépasse la fin
+                // console.log(`Forward: current=${currentTotalTime}s + duration=${forwardDuration}s = target=${targetTime}s (total=${totalDuration}s)`);
+
+                // Vérification si on dépasse la fin (comme advancePlayback)
                 if (targetTime >= totalDuration) {
                     // console.log(`Advanced beyond end - resuming recording`);
                     this.showMessage('End of recording reached - resuming live recording', 'success');
@@ -879,11 +802,14 @@
                 //     state: this.state
                 // });
 
-                // Validation du targetTime en utilisant les méthodes unifiées
-                const validatedTargetTime = this.validateTargetTime(targetTime, 'playback');
-
+                // Validation du targetTime par rapport à la durée totale disponible
+                let totalDuration = this.allSessions.reduce((acc, s) => acc + s.estimatedDuration, 0); // Somme les durées de toutes les sessions
+                // console.log(`[DEBUG seekPlayback] totalDuration calculation: ${totalDuration}s (from ${this.allSessions.length} sessions)`);
+                const validatedTargetTime = Math.max(0, Math.min(targetTime, totalDuration));
+                // console.log(`totalDuration: ${totalDuration}s, targetTime: ${targetTime}s`);
+                
                 if (validatedTargetTime !== targetTime) {
-                    // console.warn(`targetTime ${targetTime}s clamped to ${validatedTargetTime}s`);
+                    // console.warn(`targetTime ${targetTime}s clamped to ${validatedTargetTime}s (totalDuration: ${totalDuration}s)`);
                 }
 
                 // console.log(`Seeking flashback to validated time: ${validatedTargetTime}s`);
@@ -1070,16 +996,23 @@
                     return;
                 }
 
-                // Créer une nouvelle session en utilisant la classe Session
+                // Créer l'objet session avec toutes les métadonnées nécessaires
+                // 
+                // NOTE IMPORTANTE sur totalRecordedTime :
                 // totalRecordedTime représente la durée cumulée des sessions DÉJÀ sauvegardées
-                // Donc startTime = totalRecordedTime correspond à la position absolue de début
-                const session = new Session(
-                    this.totalRecordedTime,      // startTime: position absolue de début
-                    estimatedDuration,           // estimatedDuration: durée de cette session
-                    blob                         // blob: données vidéo
-                );
-                // Ajouter les propriétés supplémentaires non gérées par la classe
-                session.chunkCount = this.currentSessionChunks.length;
+                // (pas incluant la session en cours). Donc :
+                // - startTime = totalRecordedTime correspond bien à la position absolue de début
+                //   de la session dans l'enregistrement total (ex: si totalRecordedTime=5s,
+                //   la session commence à la 5ème seconde absolue)
+                // - Après avoir sauvegardé cette session, on incrémente totalRecordedTime
+                //   pour qu'il représente la durée totale incluant cette session
+                const session = {
+                    blob,                                    // Le blob vidéo contenant les données
+                    chunkCount: this.currentSessionChunks.length,  // Nombre de chunks (pour debug)
+                    estimatedDuration,                      // Durée estimée en secondes
+                    startTime: this.totalRecordedTime,      // Position absolue de début dans l'enregistrement total
+                    endTime: this.totalRecordedTime + estimatedDuration  // Position absolue de fin
+                };
 
                 // console.debug('[save] Saving session', { beforeCount: this.recordedSessions.length, estimatedDuration, totalRecordedTime: this.totalRecordedTime });
                 
@@ -1090,6 +1023,9 @@
                 // Après cette incrémentation, totalRecordedTime représente la durée totale
                 // incluant la session qu'on vient de sauvegarder
                 this.totalRecordedTime += estimatedDuration;
+                
+                // Ajouter une frontière de session (utilisée pour le calcul des fenêtres de visualisation)
+                this.sessionBoundaries.push(this.totalRecordedTime);
                 
                 // console.debug('[save] After push', { count: this.recordedSessions.length, totalRecordedTime: this.totalRecordedTime });
                 
@@ -1108,23 +1044,27 @@
             }
 
             enforceRollingBuffer() {
-                // Supprimer les sessions les plus anciennes tant que la durée totale dépasse maxDuration
-                while (this.getTotalDuration({useRecordedSessions: true}) > this.maxDuration && this.recordedSessions.length > 0) {
+                // console.debug('[buffer] enforceRollingBuffer called', { totalRecordedTime: this.totalRecordedTime, maxDuration: this.maxDuration, sessionsCount: this.recordedSessions.length });
+                while (this.totalRecordedTime > this.maxDuration && this.recordedSessions.length > 0) {
                     const removed = this.recordedSessions.shift();
+                    // console.debug('[buffer] Removed session', { removedDuration: removed.estimatedDuration, remainingCount: this.recordedSessions.length });
                     this.totalRecordedTime -= removed.estimatedDuration;
-
-                    // Ajuster les temps des sessions restantes en utilisant la méthode de la classe Session
-                    this.recordedSessions.forEach(session => {
-                        session.adjustTimes(-removed.estimatedDuration);
+                    this.sessionBoundaries.shift();
+                    // Adjust start times of remaining sessions
+                    this.recordedSessions.forEach(s => {
+                        s.startTime -= removed.estimatedDuration;
+                        s.endTime -= removed.estimatedDuration;
                     });
-
-                    // Nettoyer le blob URL de la session supprimée
-                    if (removed.blobUrl) {
+                    // Adjust total boundaries
+                    for (let i = 0; i < this.sessionBoundaries.length; i++) {
+                        this.sessionBoundaries[i] -= removed.estimatedDuration;
+                    }
+                    if (removed && removed.blobUrl) {
                         const inPlayback = this.state === 'playback' && Array.isArray(this.allSessions) && this.allSessions.includes(removed);
                         if (inPlayback) {
                             this._pendingRevokes.push(removed.blobUrl);
                         } else {
-                            URL.revokeObjectURL(removed.blobUrl);
+                    URL.revokeObjectURL(removed.blobUrl);
                         }
                     }
                 }
@@ -1156,29 +1096,31 @@
                 // Timestamp pour diagnostiquer la fréquence des updates
                 const timestamp = new Date().toISOString();
 
-                // Calculer les durées selon l'état en utilisant les méthodes unifiées
-                const totalDuration = this.getTotalDuration({
-                    includeCurrentSession: this.state === 'recording'
-                });
-                let currentTime = 0;
-                let progressPercent = 0;
+                let totalDuration = this.totalRecordedTime;
+                let currentTime = 0; // temps absolu courant (depuis début de l'enregistrement)
+                let progressPercent = 0; // largeur de la barre verte
 
-                if (this.state === 'recording') {
-                    // En enregistrement : currentTime inclut la session en cours
-                    currentTime = totalDuration;
-                    progressPercent = this.maxDuration > 0 ? Math.min((totalDuration / this.maxDuration) * 100, 100) : 0;
+                if (this.state === 'recording' && (this.currentSessionChunks.length > 0 || this.currentSessionStartMs)) {
+                    const elapsed = this.currentSessionStartMs ? Math.floor((Date.now() - this.currentSessionStartMs) / 1000) : 0;
+                    currentTime = this.totalRecordedTime + elapsed; // absolu
+                    totalDuration = Math.max(totalDuration, currentTime);
+                    const recordedSoFar = this.recordedSessions.reduce((sum, s) => sum + s.estimatedDuration, 0) + elapsed;
+                    progressPercent = this.maxDuration > 0 ? (recordedSoFar / this.maxDuration) * 100 : 0;
                 } else if (this.state === 'playback') {
-                    // En lecture : calculer la position actuelle dans la lecture
+                    // Calculate from playback
                     for (let i = 0; i < this.currentPlaybackIndex; i++) {
                         currentTime += this.allSessions[i].estimatedDuration;
                     }
                     if (this.playbackVideo) {
                         currentTime += this.playbackVideo.currentTime;
                     }
-                    progressPercent = this.maxDuration > 0 ? Math.min((totalDuration / this.maxDuration) * 100, 100) : 0;
+                    // totalDuration = somme des sessions jouables (durée totale enregistrée au moment de la lecture)
+                    totalDuration = this.allSessions.reduce((sum, s) => sum + s.estimatedDuration, 0);
+                    // La barre verte représente la durée enregistrée (buffer) par rapport à maxDuration
+                    const recordedVsBuffer = totalDuration;
+                    progressPercent = this.maxDuration > 0 ? Math.min((recordedVsBuffer / this.maxDuration) * 100, 100) : 0;
                 } else {
-                    // États stopped/transitioning : utiliser la durée totale sauvegardée
-                    progressPercent = totalDuration > 0 ? Math.min((totalDuration / this.maxDuration) * 100, 100) : 0;
+                    progressPercent = totalDuration > 0 ? (totalDuration / this.maxDuration) * 100 : 0;
                 }
 
                 // DEBUG logs
@@ -1249,10 +1191,14 @@
                 const clickPercentOfTimeline = x / rect.width;
                 // console.debug('[timeline] Click position', { x, rectWidth: rect.width, clickPercentOfTimeline });
 
-                // Calculer totalDuration selon l'état en utilisant la méthode unifiée
-                const totalDuration = this.getTotalDuration({
-                    includeCurrentSession: this.state === 'recording'
-                });
+                // Calculer totalDuration selon l'état
+                let totalDuration;
+                if (this.state === 'recording') {
+                    const elapsed = this.currentSessionStartMs ? Math.floor((Date.now() - this.currentSessionStartMs) / 1000) : 0;
+                    totalDuration = this.totalRecordedTime + elapsed;
+                } else if (this.state === 'playback') {
+                    totalDuration = this.allSessions.reduce((sum, s) => sum + s.estimatedDuration, 0);
+                }
 
                 // Calcul factorisé du targetTime (même logique pour recording et playback)
                 const targetTime = this.calculateTargetTime(clickPercentOfTimeline, rect, totalDuration);
