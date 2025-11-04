@@ -972,6 +972,30 @@
                 const elapsedMs = this.currentSessionStartMs ? (Date.now() - this.currentSessionStartMs) : 0;
                 const estimatedDuration = Math.max(0.1, elapsedMs / 1000); // Conserver la précision décimale
 
+                // Vérifications pour éviter les sessions corrompues
+                const MIN_DURATION = 0.5; // secondes
+                const MIN_BLOB_SIZE = 5000; // octets
+
+                if (estimatedDuration < MIN_DURATION) {
+                    console.log('[save] Session too short, skipping', {
+                        estimatedDuration,
+                        minDuration: MIN_DURATION,
+                        chunkCount: this.currentSessionChunks.length
+                    });
+                    this.currentSessionChunks = []; // Vider les chunks
+                    return;
+                }
+
+                if (blob.size < MIN_BLOB_SIZE) {
+                    console.log('[save] Blob too small, skipping', {
+                        blobSize: blob.size,
+                        minBlobSize: MIN_BLOB_SIZE,
+                        chunkCount: this.currentSessionChunks.length
+                    });
+                    this.currentSessionChunks = []; // Vider les chunks
+                    return;
+                }
+
                 // Créer l'objet session avec toutes les métadonnées nécessaires
                 // 
                 // NOTE IMPORTANTE sur totalRecordedTime :
