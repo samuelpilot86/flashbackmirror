@@ -396,6 +396,99 @@
     </div>
 
     <script>
+        // === CLASSES UTILITAIRES ===
+
+        // Classe Session pour encapsuler la logique des sessions vidéo
+        class Session {
+            constructor(startTime, estimatedDuration, blob) {
+                if (estimatedDuration <= 0) {
+                    throw new Error("Session duration must be positive");
+                }
+                if (!blob || !(blob instanceof Blob)) {
+                    throw new Error("Session must have a valid blob");
+                }
+
+                this.startTime = startTime;
+                this.estimatedDuration = estimatedDuration;
+                this.blob = blob;
+                this.blobUrl = null;
+            }
+
+            // Calculer endTime à la demande (évite la redondance)
+            getEndTime() {
+                return this.startTime + this.estimatedDuration;
+            }
+
+            // Ajuster les temps lors du rolling buffer
+            adjustTimes(offset) {
+                this.startTime += offset;
+                // Validation que le temps reste cohérent
+                if (this.startTime < 0) {
+                    this.startTime = 0; // Clamp à 0 minimum
+                }
+            }
+
+            // Gestion centralisée du blob URL
+            setBlobUrl(url) {
+                if (this.blobUrl && this.blobUrl !== url) {
+                    URL.revokeObjectURL(this.blobUrl);
+                }
+                this.blobUrl = url;
+            }
+
+            // Nettoyer les ressources
+            destroy() {
+                if (this.blobUrl) {
+                    URL.revokeObjectURL(this.blobUrl);
+                    this.blobUrl = null;
+                }
+                this.blob = null;
+            }
+
+            // Validation de l'état
+            isValid() {
+                return this.blob && this.estimatedDuration > 0 && this.startTime >= 0;
+            }
+        }
+
+        // === MÉTHODES UTILITAIRES ===
+
+        // Méthode unifiée pour calculer la durée totale selon le contexte
+        function getTotalDuration(context, options = {}) {
+            const {
+                includeCurrentSession = false
+            } = options;
+
+            // Le contexte détermine la source des sessions
+            let sessionArray;
+            if (context === 'recorded') {
+                sessionArray = this.recordedSessions;
+            } else if (context === 'all') {
+                sessionArray = this.allSessions;
+            } else {
+                sessionArray = context; // Si c'est un tableau passé directement
+            }
+
+            // Calculer la somme des durées des sessions sauvegardées
+            let duration = sessionArray.reduce((sum, session) => sum + session.estimatedDuration, 0);
+
+            // Ajouter la session courante si demandé et si on est en enregistrement
+            if (includeCurrentSession && this.state === 'recording' && this.currentSessionStartMs) {
+                const elapsed = Math.floor((Date.now() - this.currentSessionStartMs) / 1000);
+                duration += elapsed;
+            }
+
+            // Toujours clamper à maxDuration pour éviter les dépassements
+            return Math.min(duration, this.maxDuration);
+        }
+
+        // Validation centralisée des targetTime
+        function validateTargetTime(targetTime, context = 'playback') {
+            const includeCurrent = context === 'recording';
+            const maxDuration = getTotalDuration.call(this, 'all', { includeCurrentSession: includeCurrent });
+            return Math.max(0, Math.min(targetTime, maxDuration));
+        }
+
         class FlashbackRecorder {
             constructor() {
                 // DOM Elements
@@ -456,93 +549,6 @@
                 this.updateDurationDisplay();
                 this.setState('recording');
                 this.startRecording(); // Auto-start as per US-001
-            }
-
-            // === CLASSES UTILITAIRES ===
-
-            // Classe Session pour encapsuler la logique des sessions vidéo
-            class Session {
-                constructor(startTime, estimatedDuration, blob) {
-                    if (estimatedDuration <= 0) {
-                        throw new Error("Session duration must be positive");
-                    }
-                    if (!blob || !(blob instanceof Blob)) {
-                        throw new Error("Session must have a valid blob");
-                    }
-
-                    this.startTime = startTime;
-                    this.estimatedDuration = estimatedDuration;
-                    this.blob = blob;
-                    this.blobUrl = null;
-                }
-
-                // Calculer endTime à la demande (évite la redondance)
-                getEndTime() {
-                    return this.startTime + this.estimatedDuration;
-                }
-
-                // Ajuster les temps lors du rolling buffer
-                adjustTimes(offset) {
-                    this.startTime += offset;
-                    // Validation que le temps reste cohérent
-                    if (this.startTime < 0) {
-                        this.startTime = 0; // Clamp à 0 minimum
-                    }
-                }
-
-                // Gestion centralisée du blob URL
-                setBlobUrl(url) {
-                    if (this.blobUrl && this.blobUrl !== url) {
-                        URL.revokeObjectURL(this.blobUrl);
-                    }
-                    this.blobUrl = url;
-                }
-
-                // Nettoyer les ressources
-                destroy() {
-                    if (this.blobUrl) {
-                        URL.revokeObjectURL(this.blobUrl);
-                        this.blobUrl = null;
-                    }
-                    this.blob = null;
-                }
-
-                // Validation de l'état
-                isValid() {
-                    return this.blob && this.estimatedDuration > 0 && this.startTime >= 0;
-                }
-            }
-
-            // === MÉTHODES UTILITAIRES ===
-
-            // Méthode unifiée pour calculer la durée totale selon le contexte
-            getTotalDuration(options = {}) {
-                const {
-                    includeCurrentSession = false,
-                    useRecordedSessions = false
-                } = options;
-
-                // Choisir la source des sessions
-                const sessions = useRecordedSessions ? this.recordedSessions : this.allSessions;
-
-                // Calculer la somme des durées des sessions sauvegardées
-                let duration = sessions.reduce((sum, session) => sum + session.estimatedDuration, 0);
-
-                // Ajouter la session courante si demandé et si on est en enregistrement
-                if (includeCurrentSession && this.state === 'recording' && this.currentSessionStartMs) {
-                    const elapsed = Math.floor((Date.now() - this.currentSessionStartMs) / 1000);
-                    duration += elapsed;
-                }
-
-                // Toujours clamper à maxDuration pour éviter les dépassements
-                return Math.min(duration, this.maxDuration);
-            }
-
-            // Validation centralisée des targetTime
-            validateTargetTime(targetTime, context = 'playback') {
-                const includeCurrent = context === 'recording';
-                const maxDuration = this.getTotalDuration({ includeCurrentSession: includeCurrent });
-                return Math.max(0, Math.min(targetTime, maxDuration));
             }
 
             setState(newState) {
@@ -744,14 +750,14 @@
 
                 // Calculer le targetTime en utilisant les nouvelles méthodes unifiées
                 const backDuration = this.calculateSeekDuration(this.backPressCount);
-                const totalDuration = this.getTotalDuration({ includeCurrentSession: true });
+                const totalDuration = getTotalDuration.call(this, 'all', { includeCurrentSession: true });
 
                 let targetTime;
                 if (totalDuration < backDuration) {
                     this.showMessage(`Playing from beginning`, 'success');
                     targetTime = 0;
                 } else {
-                    targetTime = this.validateTargetTime(totalDuration - backDuration, 'recording');
+                    targetTime = validateTargetTime.call(this, totalDuration - backDuration, 'recording');
                 }
 
                 // Appeler directement seekPlayback
@@ -776,7 +782,7 @@
                 currentTotalTime += this.playbackVideo.currentTime;
 
                 const targetTime = currentTotalTime + forwardDuration;
-                const totalDuration = this.getTotalDuration({useRecordedSessions: false}); // allSessions
+                const totalDuration = getTotalDuration.call(this, 'all', {}); // allSessions
 
                 // Vérification si on dépasse la fin
                 if (targetTime >= totalDuration) {
@@ -880,7 +886,7 @@
                 // });
 
                 // Validation du targetTime en utilisant les méthodes unifiées
-                const validatedTargetTime = this.validateTargetTime(targetTime, 'playback');
+                const validatedTargetTime = validateTargetTime.call(this, targetTime, 'playback');
 
                 if (validatedTargetTime !== targetTime) {
                     // console.warn(`targetTime ${targetTime}s clamped to ${validatedTargetTime}s`);
@@ -1109,7 +1115,7 @@
 
             enforceRollingBuffer() {
                 // Supprimer les sessions les plus anciennes tant que la durée totale dépasse maxDuration
-                while (this.getTotalDuration({useRecordedSessions: true}) > this.maxDuration && this.recordedSessions.length > 0) {
+                while (getTotalDuration.call(this, 'recorded', {}) > this.maxDuration && this.recordedSessions.length > 0) {
                     const removed = this.recordedSessions.shift();
                     this.totalRecordedTime -= removed.estimatedDuration;
 
@@ -1124,7 +1130,7 @@
                         if (inPlayback) {
                             this._pendingRevokes.push(removed.blobUrl);
                         } else {
-                            URL.revokeObjectURL(removed.blobUrl);
+                    URL.revokeObjectURL(removed.blobUrl);
                         }
                     }
                 }
@@ -1157,7 +1163,7 @@
                 const timestamp = new Date().toISOString();
 
                 // Calculer les durées selon l'état en utilisant les méthodes unifiées
-                const totalDuration = this.getTotalDuration({
+                const totalDuration = getTotalDuration.call(this, 'all', {
                     includeCurrentSession: this.state === 'recording'
                 });
                 let currentTime = 0;
@@ -1219,7 +1225,7 @@
                 } else if (this.state === 'playback') {
                     this.timeCurrent.style.display = '';
                     this.timeCurrent.textContent = this.formatTime(Math.max(0, Math.floor(currentTime)));
-                } else {
+                    } else {
                     this.timeCurrent.style.display = '';
                     this.timeCurrent.textContent = this.formatTime(Math.max(0, Math.floor(currentTime)));
                 }
@@ -1250,7 +1256,7 @@
                 // console.debug('[timeline] Click position', { x, rectWidth: rect.width, clickPercentOfTimeline });
 
                 // Calculer totalDuration selon l'état en utilisant la méthode unifiée
-                const totalDuration = this.getTotalDuration({
+                const totalDuration = getTotalDuration.call(this, 'all', {
                     includeCurrentSession: this.state === 'recording'
                 });
 
