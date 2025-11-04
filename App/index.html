@@ -531,7 +531,8 @@
                 this.backResetTimer = null;
                 this.forwardResetTimer = null;
                 this.recordingStartTime = 0;
-                this.totalRecordedTime = 0;
+                this.totalRecordedTime = 0; // Durée actuellement disponible (après rolling buffer)
+                this.totalRecordedTimeEver = 0; // Durée totale cumulative depuis le début (incluant supprimé)
                 this.maxDuration = 10; // seconds
                 this._pendingRevokes = [];
                 this.activeMimeType = null; // MimeType utilisé pour les blobs
@@ -902,12 +903,12 @@
             calculateTargetTime(clickPercentOfTimeline, rect, totalDuration) {
                 /**
                 * Calcule le timestamp cible en fonction de la position du clic sur la timeline.
-                * Utilise la même logique pour recording et playback : calcul par rapport à la largeur effective
-                * de la barre verte avec gestion de l'overflow.
+                * Rolling buffer aware : la barre verte représente la fenêtre visible actuelle.
                  */
-            
-                // Calcul de la largeur effective de la barre verte (même logique que updateTimeline)
-                const effectiveBarWidthPercent = this.maxDuration > 0 ? Math.min((totalDuration / this.maxDuration) * 100, 100) : 100;
+
+                // Avec rolling buffer : utiliser la durée actuellement disponible pour la barre verte
+                const currentWindowDuration = Math.min(this.totalRecordedTimeEver, this.maxDuration);
+                const effectiveBarWidthPercent = this.maxDuration > 0 ? Math.min((currentWindowDuration / this.maxDuration) * 100, 100) : 100;
                 const effectiveBarWidthPx = (effectiveBarWidthPercent / 100) * rect.width;
 
                 // Convertir clickPercentOfTimeline en position x (pixels)
@@ -925,18 +926,13 @@
                     // console.debug('[timeline] Click on gray area (beyond green bar), treating as 100%', { x, effectiveBarWidthPx });
                 }
 
-                // Calculer targetTime selon qu'il y ait overflow ou non
-                let targetTime;
-                if (totalDuration <= this.maxDuration) {
-                    // Pas d'overflow : la barre verte représente totalDuration secondes
-                    targetTime = percent * totalDuration;
-                } else {
-                    // Overflow : la barre verte représente les maxDuration dernières secondes
-                    const overflow = totalDuration - this.maxDuration;
-                    targetTime = (percent * this.maxDuration) + overflow;
-                }
-                const overflowForLog = Math.max(0, totalDuration - this.maxDuration);
-                // console.log(`Timeline click: clickPercentOfTimeline=${clickPercentOfTimeline}, effectiveBarWidthPercent=${effectiveBarWidthPercent}%, effectiveBarWidthPx=${effectiveBarWidthPx}px, percent=${percent}, overflow=${overflowForLog}s, totalDuration=${totalDuration}s, targetTime=${targetTime}s`);
+                // Calculer targetTime avec rolling buffer awareness
+                // Le clic sur la barre verte donne une position dans la fenêtre visible
+                // On doit la convertir en timestamp absolu depuis le début
+                const overflow = Math.max(0, this.totalRecordedTimeEver - this.maxDuration);
+                const targetTime = overflow + (percent * currentWindowDuration);
+
+                // console.log(`Timeline click: percent=${percent}, currentWindowDuration=${currentWindowDuration}s, overflow=${overflow}s, targetTime=${targetTime}s`);
                 return targetTime;
             }
 
@@ -1096,6 +1092,9 @@
                 // Après cette incrémentation, totalRecordedTime représente la durée totale
                 // incluant la session qu'on vient de sauvegarder
                 this.totalRecordedTime += estimatedDuration;
+
+                // Mettre à jour la durée totale cumulative (incluant les parties supprimées par rolling buffer)
+                this.totalRecordedTimeEver += estimatedDuration;
                 
                 // console.debug('[save] After push', { count: this.recordedSessions.length, totalRecordedTime: this.totalRecordedTime });
                 
@@ -1195,22 +1194,27 @@
                 //     maxDuration: this.maxDuration
                 // });
 
-                // Mettre à jour la barre verte (progress)
-                const effectiveBarWidthPercent = Math.min(progressPercent, 100);
+                // Mettre à jour la barre verte (progress) - représente la durée actuellement disponible
+                const progressPercentAdjusted = (currentWindowDuration / this.maxDuration) * 100;
+                const effectiveBarWidthPercent = Math.min(progressPercentAdjusted, 100);
                 this.timelineProgress.style.width = `${effectiveBarWidthPercent}%`;
 
-                // Calcul de la fenêtre de visualisation (overflow)
-                const totalRecorded = totalDuration; // déjà absolu
-                const overflow = Math.max(0, totalRecorded - this.maxDuration);
+                // Calcul de la fenêtre de visualisation avec logique rolling buffer
+                const totalEverRecorded = this.totalRecordedTimeEver; // Durée totale cumulative (incluant supprimé)
+                const currentWindowDuration = Math.min(totalEverRecorded, this.maxDuration); // Durée actuellement disponible
+                const overflow = Math.max(0, totalEverRecorded - this.maxDuration); // Offset des données supprimées
                 const windowStart = overflow;
-                const windowWidth = Math.max(1, Math.min(totalRecorded, this.maxDuration));
+                const windowWidth = Math.max(1, currentWindowDuration);
 
-                // timeStart: 0 avant overflow, sinon overflow
-                this.timeStart.textContent = this.formatTime(windowStart);
+                // Timer de gauche (timeStart): 0:00 tant que ≤ durée max, puis offset des données supprimées
+                if (totalEverRecorded <= this.maxDuration) {
+                    this.timeStart.textContent = "0:00";
+                } else {
+                    this.timeStart.textContent = this.formatTime(overflow);
+                }
 
-                // timeEnd: maxDuration si on n'a pas dépassé, sinon totalRecorded
-                const endDisplay = totalRecorded <= this.maxDuration ? this.maxDuration : totalRecorded;
-                this.timeEnd.textContent = this.formatTime(endDisplay);
+                // Timer de droite (timeEnd): Toujours la durée totale d'enregistrement depuis le début
+                this.timeEnd.textContent = this.formatTime(totalEverRecorded);
 
                 // timeCurrent (spéc utilisateur):
                 // - En enregistrement: afficher totalRecorded si <= maxDuration, sinon masquer
@@ -1230,12 +1234,12 @@
                     this.timeCurrent.textContent = this.formatTime(Math.max(0, Math.floor(currentTime)));
                 }
 
-                // Curseur rouge: position relative à la fenêtre visible et bornée par la largeur verte
+                // Curseur rouge: position relative à la fenêtre visible (rolling buffer aware)
                 if (this.state === 'playback' && this.playbackVideo) {
-                    const relativeProgress = (currentTime - windowStart) / windowWidth;
-                    const clamped = Math.max(0, Math.min(1, relativeProgress));
-                    const leftWithinGreen = (clamped * effectiveBarWidthPercent);
-                    // console.debug('[timeline] cursor', { windowStart, windowWidth, relativeProgress, clamped, effectiveBarWidthPercent, leftWithinGreen });
+                    // currentTime est déjà absolu depuis le début de l'enregistrement
+                    // On le ramène dans la fenêtre visible (0 = début fenêtre, windowWidth = fin fenêtre)
+                    const relativeProgress = Math.max(0, Math.min(1, (currentTime - windowStart) / windowWidth));
+                    const leftWithinGreen = (relativeProgress * effectiveBarWidthPercent);
                     this.timelinePosition.style.left = `${leftWithinGreen}%`;
                 }
             }
@@ -1255,7 +1259,8 @@
                 const clickPercentOfTimeline = x / rect.width;
                 // console.debug('[timeline] Click position', { x, rectWidth: rect.width, clickPercentOfTimeline });
 
-                // Calculer totalDuration selon l'état en utilisant la méthode unifiée
+                // Calculer la durée totale selon l'état (rolling buffer aware)
+                const totalEverRecorded = this.totalRecordedTimeEver;
                 const totalDuration = getTotalDuration.call(this, 'all', {
                     includeCurrentSession: this.state === 'recording'
                 });

@@ -34,7 +34,7 @@
 - [ ] Back button is prominently displayed and easily accessible
 - [ ] On a laptop, I can use the "left" key of my keybord and it has the same effect as the back button
 - [ ] Each back button press immediately triggers playback from a calculated flashback timestamp
-- [ ] Flashback duration follows exponential progression: 1s, 2s, 4s, 8s, 16s, etc.
+- [ ] Flashback follows exponential progression: 1s, 2s, 4s, 8s, 16s, etc.
 - [ ] Formula: flashback_duration = 2^(n-1) seconds, where n = number of back button presses
 - [ ] Recording stops immediately when back button is first pressed
 - [ ] Video playback starts immediately from flashback timestamp (no delay)
@@ -63,12 +63,12 @@ In this example, each press starts reading from a different timestamp.
 **So that** I can start fresh flashback sequences without confusion
 
 **Acceptance Criteria:**
-- [ ] Counter resets to zero after 3 seconds of no back button presses
+- [ ] Counter resets to zero after 0,5 seconds of no back button presses
 - [ ] Reset timer starts after last back button press
 - [ ] Reset timer is cancelled if back button is pressed again
 - [ ] Visual indicator shows current counter state
 - [ ] Reset is immediate when timer expires
-- [ ] **Important**: The 3-second timeout only resets the counter, NOT the playback behavior
+- [ ] **Important**: The 0,5-second timeout only resets the counter, NOT the playback behavior
 - [ ] Playback continues normally during the 3-second countdown
 - [ ] After counter reset, next back button press starts from 1 second back (first press)
 
@@ -168,56 +168,19 @@ In this example, each press starts reading from a different timestamp.
 - [ ] Performance maintained during cleanup operations
 - [ ] Duration setting persists across browser sessions (localStorage)
 
-**Example Behavior:**
-- **Default setting**: 20 minutes maximum
-- **User sets**: 10 minutes maximum
-- **After 10 minutes**: Each new second recorded triggers removal of oldest second
-- **Memory usage**: Remains constant at ~10 minutes of data
-- **Flashbacks**: Continue working normally within the rolling window
-
 **Technical Requirements:**
 - Rolling buffer algorithm: FIFO (First In, First Out) chunk removal
 - Session management: Handle partial session cleanup and timestamp recalculation
 - Memory management: Proper blob disposal and garbage collection
-- UI integration: Settings panel with validation (5-120 min range)
+- UI integration: Settings panel with validation
 - Storage: localStorage persistence for user preference
 - Performance: Sub-100ms cleanup operations to avoid UI freezing
 
 **Business Rules:**
-- Duration range: 5-120 minutes (validated for browser memory constraints)
-- Default: 20 minutes (balance between utility and memory safety)
+- Duration range: 5-120 secibds (validated for browser memory constraints)
+- Default: 10 seconds (balance between utility and memory safety)
 - Cleanup: Automatic, silent, no user interruption
 - Flashbacks: Fully functional within rolling window
-
----
-
-### US-009: Stop Flashback & Resume Recording
-**As a** user watching a flashback,
-**I want** to be able to stop the flashback playback early and resume recording immediately,
-**So that** I don't have to wait for long flashbacks to complete and can continue recording without interruption.
-
-**Acceptance Criteria:**
-- [ ] "Stop Flashback" button appears during flashback playback
-- [ ] Clicking the button immediately stops playback and starts recording
-- [ ] Same behavior as natural end of playback (recording resumes seamlessly)
-- [ ] Button hidden during recording state and when stopped
-- [ ] Keyboard shortcut (Escape key) for same functionality
-- [ ] Visual feedback during transition from playback to recording
-- [ ] No data loss or recording gaps during transition
-
-**Example Behavior:**
-- **During flashback**: "Stop Flashback" button visible
-- **Click/Escape**: Playback stops immediately, recording starts immediately
-- **Same as natural end**: No difference in behavior between early stop and natural completion
-- **Quick workflow**: User can exit long flashbacks and continue recording seamlessly
-
-**Technical Requirements:**
-- Playback interruption handling without corruption
-- Seamless transition from playback to recording state
-- UI state management for button visibility (only during playback)
-- Keyboard event handling (Escape key)
-- Maintain recording continuity and session integrity
-- No performance impact on transition speed
 
 ---
 
@@ -227,30 +190,19 @@ In this example, each press starts reading from a different timestamp.
 **So that** I can quickly understand the scope of my recording and navigate to any specific moment instantly.
 
 **Acceptance Criteria:**
-- [ ] Timeline bar displays total recording duration from timestamp 0 to maximum timestamp
-- [ ] Visual markers indicate boundaries between recording sessions
 - [ ] Click anywhere on timeline to instantly jump to that timestamp and start/continue playback from that timestamp
 - [ ] Current playback position shown with visual indicator during flashback
-- [ ] Time labels display start time (0), current position, and end time
 - [ ] Timeline works during both recording and playback states
-- [ ] Timeline remains visible during recording state 
+- [ ] Timeline remains visible during recording state
 - [ ] Seamless integration with existing flashback, forward navigation systems and rolling buffer
 - [ ] Timeline adapts when rolling buffer removes old data (the part that is the further left is the start of the rolling buffer. Deleted parts are not represented)
 - [ ] Responsive design that adapts to different screen sizes
 - [ ] Timeline updates in real-time during recording (The whole length of the timeline is used even if the recording has just started.The visual markers indicating boundaries will thus progress to the left.)
-
-**Example Behavior:**
-- **Recording state**: Timeline shows progress from 0 to current recording time, updates every second
-- **Flashback state**: Timeline shows full duration with current playback position indicator
-- **Click during recording**: Click jumps to timestamp and starts flashback from that point
-- **Click during playback**: Click jumps to new timestamp and continues playback from there
-- **Rolling buffer active**: Timeline shows only available time window, older sections are not displayed. Timeline starts at the first non-deleted second
-- **Session markers**: Vertical lines show where each recording session starts/ends
-- **Time display**: "0:00 / 15:30 / 45:22" (start / current / end)
-- **Buffer rollover**: Timeline smoothly adjusts when old data is removed
+- [ ] **Timer display behavior with rolling buffer:**
+  - **Timer de droite (fin):** Affiche toujours la durée totale d'enregistrement depuis le début, même si des parties ont été supprimées par le rolling buffer
+  - **Timer de gauche (début):** Tant que la durée totale ≤ durée max, affiche "0:00". Une fois dépassé, affiche "durée totale - durée max" pour indiquer l'offset des données supprimées
 
 **Edge Cases:**
-- **Click on future timestamp during recording**: Should not be allowed (because it is not represented: the whole timeline represents the recorded and not-rolled-out part)
 - **Rolling buffer removes data while timeline visible**: Timeline updates smoothly, time labels adjust
 - **Very short recordings**: Timeline still functional because the duration of the short recording is stretched through the whole timeline
 - **Timeline click during active flashback transition**: Queued until current transition completes
@@ -281,7 +233,6 @@ In this example, each press starts reading from a different timestamp.
 - **IndexedDB**: Required for session storage
 
 ### Performance Requirements
-- **Recording Quality**: 720p @ 30fps (optimal for 13-inch display)
 - **Audio Quality**: 44.1kHz, 16-bit
 - **Memory Usage**: Optimized for long recording sessions
 - **Response Time**: <100ms for back button press response
