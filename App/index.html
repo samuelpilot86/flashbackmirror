@@ -720,8 +720,13 @@
             /**
              * Calcule la durée d'un flashback/avance basée sur le nombre d'appuis successifs.
              * Utilise une progression exponentielle (1, 2, 4, 8, 16... secondes).
+             *
+             * Formule: 2^(pressCount - 1) secondes
+             * - 1er appui (pressCount=1): 2^(1-1) = 2^0 = 1 seconde
+             * - 2ème appui (pressCount=2): 2^(2-1) = 2^1 = 2 secondes
+             * - 3ème appui (pressCount=3): 2^(3-1) = 2^2 = 4 secondes
              */
-                return Math.pow(2, pressCount);
+                return Math.pow(2, pressCount - 1);
             }
 
             async seekPlayback(targetTime, options = {}) {
