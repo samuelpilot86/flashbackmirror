@@ -652,6 +652,9 @@
                 console.log(`[${new Date().toISOString()}] BACK BUTTON PRESSED`);
                 // Permettre les flashbacks même pendant 'transitioning' pour contrôle immédiat
 
+                // Incrémenter le compteur dès le début pour éviter les courses de conditions
+                this.incrementBackCounter();
+
                 // Calculer directement le targetTime
                 const backDuration = this.calculateSeekDuration(this.backPressCount);
                 let totalDuration = this.totalRecordedTime;
@@ -675,12 +678,13 @@
                     allowFromRecording: true,
                     allowFromStopped: true
                 });
-
-                this.incrementBackCounter();
             }
 
             async handleForward() {
                 // Permettre les forwards même pendant 'transitioning' pour contrôle immédiat
+
+                // Incrémenter le compteur dès le début pour éviter les courses de conditions
+                this.incrementForwardCounter();
 
                 // Calculer la position cible (similaire à handleBack)
                 const forwardDuration = this.calculateSeekDuration(this.forwardPressCount);
@@ -708,8 +712,6 @@
                     allowFromRecording: false,
                     allowFromStopped: false
                 });
-
-                this.incrementForwardCounter();
             }
 
             calculateSeekDuration(pressCount) {
