@@ -917,9 +917,10 @@
                 this.statusText.textContent = 'PLAYBACK';
                 this.videoOverlay.style.display = 'none';
                 this.flashbackInfo.style.display = 'block';
-                this.backPressCount = 0;
-                this.forwardPressCount = 0;
-                this.updateCounterDisplay();
+                // Ne pas remettre les compteurs à 0 pour permettre les flashbacks multiples continus
+                // this.backPressCount = 0;
+                // this.forwardPressCount = 0;
+                // this.updateCounterDisplay();
                 this.timelinePosition.style.display = 'block';
                 this.timelineLegend.textContent = 'Click timeline to jump • ←/→ to navigate';
                 // S'assurer que la timeline est visible en mode lecture
