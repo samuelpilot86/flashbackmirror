@@ -649,6 +649,7 @@
             // === GESTION DES FLASHBACKS ===
 
             async handleBack() {
+                console.log(`[${new Date().toISOString()}] BACK BUTTON PRESSED`);
                 // Permettre les flashbacks même pendant 'transitioning' pour contrôle immédiat
 
                 // Calculer directement le targetTime
@@ -1055,6 +1056,9 @@
                 // avec les données disponibles (durée totale enregistrée, etc.).
                 // Si la timeline est masquée (updateUIForStopped), les mises à jour DOM n'ont pas d'effet visuel.
 
+                // Timestamp pour diagnostiquer la fréquence des updates
+                const timestamp = new Date().toISOString();
+
                 let totalDuration = this.totalRecordedTime;
                 let currentTime = 0; // temps absolu courant (depuis début de l'enregistrement)
                 let progressPercent = 0; // largeur de la barre verte
@@ -1083,7 +1087,7 @@
                 }
 
                 // DEBUG logs
-                console.debug('[timeline] state', {
+                console.debug(`[${timestamp}] [timeline] state`, {
                     state: this.state,
                     totalDuration,
                     currentTime,
@@ -1467,8 +1471,8 @@
                         if (!this._endedFired) {
                             const videoDuration = this.playbackVideo.duration || session.estimatedDuration;
                             if (currentTime >= videoDuration - 0.2 || currentTime >= session.estimatedDuration - 0.2) {
-                                console.debug('[play] Near end detected in timeupdate', { 
-                                    currentTime, 
+                                console.debug(`[${new Date().toISOString()}] [play] Near end detected in timeupdate`, {
+                                    currentTime,
                                     videoDuration,
                                     estimatedDuration: session.estimatedDuration,
                                     endedFired: this._endedFired
@@ -1476,7 +1480,7 @@
                                 // Forcer immédiatement plutôt que d'attendre
                                 setTimeout(() => {
                                     if (!this._endedFired) {
-                                        console.debug('[play] Forcing onEnded call from timeupdate guard');
+                                        console.debug(`[${new Date().toISOString()}] [play] Forcing onEnded call from timeupdate guard`);
                                         onEnded();
                                     }
                                 }, 100);
