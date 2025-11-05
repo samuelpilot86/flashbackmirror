@@ -169,10 +169,10 @@ In this example, each press starts reading from a different timestamp.
 - [ ] Duration setting persists across browser sessions (localStorage)
 
 **Example Behavior:**
-- **Default setting**: 20 minutes maximum
-- **User sets**: 10 minutes maximum
-- **After 10 minutes**: Each new second recorded triggers removal of oldest second
-- **Memory usage**: Remains constant at ~10 minutes of data
+- **Default setting**: 10 seconds maximum
+- **User sets**: 600 seconds (10 minutes) maximum
+- **After 600 seconds**: Each new second recorded triggers removal of oldest second
+- **Memory usage**: Remains constant at ~600 seconds of data
 - **Flashbacks**: Continue working normally within the rolling window
 
 **Technical Requirements:**
