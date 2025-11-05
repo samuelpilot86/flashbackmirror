@@ -158,7 +158,7 @@ In this example, each press starts reading from a different timestamp.
 **So that** I can record for extended periods without risking browser memory exhaustion or performance degradation.
 
 **Acceptance Criteria:**
-- [ ] Configurable maximum duration parameter (default: 20 minutes, range: 5-120 minutes)
+- [ ] Configurable maximum duration parameter (default: 10 seconds, range: 1-3600 seconds)
 - [ ] UI control (slider/input) to adjust maximum duration in real-time
 - [ ] Automatic activation of rolling buffer when duration limit is reached
 - [ ] Oldest second of recording automatically removed each new second recorded
@@ -179,13 +179,13 @@ In this example, each press starts reading from a different timestamp.
 - Rolling buffer algorithm: FIFO (First In, First Out) chunk removal
 - Session management: Handle partial session cleanup and timestamp recalculation
 - Memory management: Proper blob disposal and garbage collection
-- UI integration: Settings panel with validation (5-120 min range)
+- UI integration: Settings panel with validation (1-3600 seconds range)
 - Storage: localStorage persistence for user preference
 - Performance: Sub-100ms cleanup operations to avoid UI freezing
 
 **Business Rules:**
-- Duration range: 5-120 minutes (validated for browser memory constraints)
-- Default: 20 minutes (balance between utility and memory safety)
+- Duration range: 1-3600 seconds (validated for browser memory constraints)
+- Default: 10 seconds (balance between utility and memory safety)
 - Cleanup: Automatic, silent, no user interruption
 - Flashbacks: Fully functional within rolling window
 
