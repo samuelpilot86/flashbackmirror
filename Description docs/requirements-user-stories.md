@@ -272,6 +272,169 @@ In this example, each press starts reading from a different timestamp.
 
 ---
 
+### US-011: Timeline Markers & Navigation
+
+**User Story**:  
+**As a** coach/trainee capturing training sessions,  
+**I want** to drop flashback markers on the timeline via a button or the space bar and jump to previous/next markers with dedicated controls or keyboard shortcuts,  
+**So that** I can instantly revisit key moments without scrubbing through the entire buffer.
+
+**Acceptance Criteria**:
+- [ ] Space bar or a dedicated “Add marker” button drops a marker at the current absolute time
+- [ ] Timeline renders each timestamp marker with a visible indicator
+- [ ] “Previous timestamp” button / `ArrowUp` jumps to the previous marker (or start of buffer if none)
+- [ ] “Next timestamp” button / `ArrowDown` jumps to the next marker (or end of buffer if none)
+- [ ] Markers shift left as older chunks are purged and disappear when they fall outside the rolling buffer
+- [ ] Keyboard shortcuts do not interfere with existing playback controls
+- [ ] Timeline is updated at the moment where the timestamp is created (we should not wait for 1 second)
+
+**Technical Considerations**:
+- Data structure to store markers with absolute timestamps (no need to explicitly tie them to a chunk)
+- Update logic when enforcing the rolling buffer to remove markers outside the retained window
+- Timeline rendering updates in sync with marker changes
+- Conflict-free keyboard event handling alongside existing shortcuts
+
+---
+
+### 📊 Full Timeline Bar with Timestamp Navigation
+**Priority**: Medium
+**Estimated Effort**: Medium (1-2 weeks)
+
+**Description**:
+Add a comprehensive timeline bar that spans from timestamp 0 (beginning of all recordings) to the total duration timestamp. This bar serves as both a visual overview and an interactive navigation tool.
+
+**User Value**:
+- **Complete Overview**: See the entire recording session at a glance
+- **Quick Navigation**: Jump to any point instantly
+- **Session Boundaries**: Visual indication of where each recording session begins/ends
+- **Time Reference**: Always know current position in total timeline
+
+**Acceptance Criteria**:
+- [ ] Timeline bar showing total recording duration (0 to max timestamp)
+- [ ] Visual markers for session boundaries
+- [ ] Click-to-seek functionality
+- [ ] Current playback position indicator
+- [ ] Time labels (start, current, end times)
+- [ ] Integration with existing flashback system
+- [ ] Works during playback and recording states
+
+
+**Technical Requirements**:
+- Timeline calculation across multiple sessions
+- Visual rendering (progress bar style)
+- Click coordinate to timestamp conversion
+- Integration with existing playback system
+- Real-time position updates
+
+**Dependencies**:
+- Existing session management system
+- Playback position tracking
+- UI component for interactive bars
+
+---
+
+### 🎵 Audio Waveform Visualization & Interactive Flashback Selection
+**Priority**: High
+**Estimated Effort**: High (2-3 weeks)
+
+**Description**:
+Implement an audio waveform visualization that displays the sound levels of the recorded audio over time. Users can click on any point in the waveform to instantly start flashback playback from that exact timestamp.
+
+**User Value**:
+- **Precision Control**: Users can precisely select any moment in their recording instead of using exponential back/forward buttons
+- **Visual Feedback**: See the audio levels to identify key moments (loud parts, quiet parts, etc.)
+- **Faster Navigation**: Direct click navigation instead of sequential button presses
+- **Professional Feel**: Similar to audio editing software interfaces
+
+**Acceptance Criteria**:
+- [ ] Real-time waveform generation from recorded audio data
+- [ ] Clickable waveform bar showing audio amplitude over time
+- [ ] Instant flashback start from clicked position
+- [ ] Visual indicator of current playback position
+- [ ] Zoom/pan capabilities for long recordings
+- [ ] Responsive design for different screen sizes
+
+**Technical Requirements**:
+- Web Audio API for audio analysis and waveform generation
+- Canvas or SVG for waveform rendering
+- Click event handling for position selection
+- Audio buffer processing for amplitude data extraction
+- Performance optimization for large recordings
+
+**Dependencies**:
+- Access to raw audio data from MediaRecorder chunks
+- Canvas/SVG rendering capabilities
+- Web Audio API support
+
+---
+
+### FEAT-001: Règle Timeline avec Photos Extraites de l'Enregistrement {#feat-001-règle-timeline-avec-photos-extraites-de-lenregistrement}
+
+**Description**:  
+Créer une nouvelle règle (timeline) qui affiche des photos extraites de l'enregistrement vidéo. Cette règle permettra de visualiser des frames clés de l'enregistrement sous forme de miniatures, offrant une navigation visuelle alternative à la timeline actuelle avec la barre de progression verte.
+
+**User Value**:
+- **Navigation visuelle** : Les utilisateurs peuvent voir des aperçus visuels de l'enregistrement pour naviguer plus intuitivement
+- **Repérage rapide** : Identifier rapidement des moments clés dans l'enregistrement grâce aux miniatures
+- **Expérience enrichie** : Complément à la timeline existante, offrant une vue d'ensemble visuelle de l'enregistrement
+- **Navigation précise** : Cliquer sur une miniature pour naviguer directement à ce moment de l'enregistrement
+
+**Acceptance Criteria**:
+- [ ] Une nouvelle règle (timeline) est affichée, distincte de la timeline existante avec la barre verte
+- [ ] Des photos (frames) sont extraites automatiquement de l'enregistrement vidéo à intervalles réguliers. L'intervalle est déterminé de sorte que la largeur d'une image sur la règle corresponde à la durée de l'intervalle.
+- [ ] Les photos sont affichées sous forme de miniatures dans la règle
+- [ ] Les miniatures sont positionnées proportionnellement à leur position temporelle dans l'enregistrement
+- [ ] Cliquer sur une miniature déclenche un flashback vers le moment correspondant dans l'enregistrement (attention, le clic sur le début de la miniature déclenche un flashback vers ce moment de la miniature. Mais le clic au milieu de la miniature déclenche un flashback vers le début de la miniature, plus la moitié de l'intervalle. Un clic proche de la partie droite de la miniature enverra un moment légèrement antérieur à celui dont vient la miniature suivante.)
+- [ ] Les photos sont extraites en temps réel pendant l'enregistrement (si possible) ou après l'enregistrement
+- [ ] Les miniatures sont mises à jour dynamiquement pendant l'enregistrement
+- [ ] La longueur affichée des miniatures est proportionnelle à la durée de l'enregistrement, de la même manière que c'est le cas pour la barre verte et pour la waveform. En conséquence, l'affichage de la dernière vignette sera fréquemment tronqué et sera dévoilé progressivement au fil de l'enregistrement.
+- [ ] Performance : l'extraction et l'affichage des photos ne ralentissent pas significativement l'enregistrement
+
+**Technical Considerations**:
+- **Extraction de frames** :
+  - Utiliser `HTMLVideoElement.captureStream()` ou `Canvas API` pour capturer des frames du flux vidéo
+  - Extraire des frames à intervalles réguliers
+  - Stocker les frames en mémoire ou dans `IndexedDB` pour un accès rapide
+  - Considérer la compression des images pour optimiser la mémoire
+  
+- **Affichage** :
+  - Créer un nouveau conteneur HTML pour la règle de photos (similaire à `timelineContainer`)
+  - Utiliser des éléments `<img>` ou `<canvas>` pour afficher les miniatures
+  - Positionner le bord gauche des miniatures proportionnellement à leur timestamp
+  - Gérer le scroll horizontal si nécessaire pour les longs enregistrements
+  
+- **Navigation** :
+  - Réutiliser la fonction `calculateTargetTimeFromClick()` ou similaire pour calculer le timestamp
+  - Utiliser `seekFlashback()` pour naviguer vers le moment sélectionné
+  - Synchroniser avec la timeline existante et la waveform
+  
+- **Performance** :
+  - Charger les frames de manière asynchrone pour ne pas bloquer l'UI
+  - Considérer le lazy loading des miniatures
+  
+- **Intégration** :
+  - S'assurer que la règle fonctionne avec tous les états (recording, flashback, stopped, paused)
+
+**Dependencies**:
+- Accès au flux vidéo de l'enregistrement
+- Canvas API ou HTMLVideoElement pour l'extraction de frames
+- IndexedDB ou mémoire pour le stockage des frames (optionnel)
+- Fonctionnalités existantes : `seekFlashback()`, `calculateTargetTimeFromClick()`
+
+**Recommended Approach**:
+1. Créer la structure HTML/CSS pour la nouvelle règle de photos
+2. Implémenter une fonction `extractFrameFromVideo(timestamp)` pour extraire une frame à un moment donné
+3. Créer une fonction `updatePhotoTimeline()` qui extrait et affiche les frames à intervalles réguliers
+4. Implémenter le clic sur la règle pour naviguer vers le timestamp correspondant
+5. Ajouter un toggle pour afficher/masquer la règle
+6. Optimiser les performances (décimation, lazy loading, compression)
+7. Tester avec différents types d'enregistrements (courts, longs, haute résolution)
+
+Note : Factorise au maximum avec les fonctionnalités déjà existantes, notamment pour déterminer la largeur temporelle de cette règle, qui doit être identique aux autres règles ; pour le mode de calcul du timestamp du flashback lorsqu'on clique sur cette règle ; les fréquences de mise à jour d'affichage...
+
+---
+
+
 ## Technical Constraints
 
 ### Browser Compatibility

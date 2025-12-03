@@ -1,0 +1,2742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashback - Training Recorder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #F8FAFC;
+            color: #1E293B;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: white;
+            padding: 16px 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2563EB;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .recording-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #EF4444;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            gap: 24px;
+            margin-right: 300px;
+        }
+
+        .video-container {
+            position: relative;
+            width: 800px;
+            height: 450px;
+            background-color: #1E293B;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #videoPreview {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .controls {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: #2563EB;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #1D4ED8;
+        }
+
+        .btn-danger {
+            background-color: #EF4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #DC2626;
+        }
+
+        .btn-secondary {
+            background-color: #64748B;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #475569;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Timeline Styles */
+        .timeline-container {
+            width: 800px;
+            margin: 8px auto 0 auto;
+        }
+
+        .timeline-bar-container {
+            position: relative;
+        }
+
+        .timeline-time-display {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #6B7280;
+            font-family: 'Courier New', monospace;
+        }
+        .timeline-time-display-main {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .timeline-legend {
+            margin-top: 4px;
+            text-align: center;
+        }
+
+        .timeline-legend-text {
+            font-size: 11px;
+            color: #9CA3AF;
+            font-style: italic;
+        }
+
+        .timeline-bar {
+            height: 24px;
+            background-color: #F3F4F6;
+            border-radius: 12px;
+            cursor: pointer;
+            position: relative;
+            border: 1px solid #D1D5DB;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #10B981 0%, #059669 100%);
+            border-radius: 12px;
+            transition: width 0.3s ease;
+        }
+
+        .timeline-position {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 3px;
+            background-color: #EF4444;
+            border-radius: 2px;
+            z-index: 2;
+            box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+        }
+
+        .timeline-bar:hover {
+            border-color: #9CA3AF;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+
+        /* Responsive timeline */
+        @media (max-width: 768px) {
+            .timeline-container {
+                width: 100%;
+                max-width: 400px;
+            }
+
+            .timeline-time-display {
+                font-size: 11px;
+            }
+
+            .timeline-bar {
+                height: 20px;
+                border-radius: 10px;
+            }
+
+            .timeline-progress {
+                border-radius: 10px;
+            }
+
+            .timeline-position {
+                width: 2px;
+            }
+        }
+
+        .error-message {
+            background-color: #FEF2F2;
+            color: #DC2626;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 16px 0;
+            display: none;
+        }
+
+        .success-message {
+            background-color: #F0FDF4;
+            color: #16A34A;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 16px 0;
+            display: none;
+        }
+
+        .settings-panel {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-top: 16px;
+        }
+
+        .duration-control {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .duration-control label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            white-space: nowrap;
+        }
+
+        .duration-control input[type="range"] {
+            width: 120px;
+        }
+
+        .duration-control input[type="number"] {
+            width: 80px;
+            padding: 4px 8px;
+            border: 1px solid #D1D5DB;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .duration-control span {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2563EB;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .video-container {
+                width: 100%;
+                max-width: 400px;
+                height: 225px;
+            }
+
+            .controls {
+                flex-direction: column;
+                gap: 12px;
+            }
+        }
+
+        /* Debug Panel Styles */
+        .debug-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 300px;
+            height: 100vh;
+            background: white;
+            border-left: 1px solid #D1D5DB;
+            box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .debug-panel-header {
+            padding: 16px;
+            border-bottom: 1px solid #E5E7EB;
+            background: #F9FAFB;
+        }
+
+        .debug-panel-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1E293B;
+            margin: 0;
+        }
+
+        .debug-panel-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 12px;
+            background: #F8FAFC;
+            overflow: hidden;
+        }
+
+        .debug-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .debug-section--sessions .debug-list {
+            max-height: 200px;
+        }
+
+        .debug-section--chunks {
+            flex: 1;
+            min-height: 0;
+        }
+
+        .debug-section--chunks .debug-list {
+            flex: 1;
+            min-height: 0;
+        }
+
+        .debug-section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1E293B;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .debug-list {
+            background: white;
+            border: 1px solid #E5E7EB;
+            border-radius: 6px;
+            padding: 8px;
+            overflow-y: auto;
+        }
+
+        .debug-segments-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .debug-empty {
+            padding: 16px;
+            text-align: center;
+            color: #9CA3AF;
+            font-size: 14px;
+            font-style: italic;
+        }
+
+        .segment-item {
+            padding: 8px 12px;
+            margin-bottom: 4px;
+            border-radius: 6px;
+            border: 1px solid #E5E7EB;
+            background: #FFFFFF;
+            font-size: 13px;
+            transition: background-color 0.2s;
+        }
+
+        .segment-item.playing {
+            background: #DBEAFE;
+            border-color: #3B82F6;
+        }
+
+        .segment-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .segment-number {
+            font-weight: 600;
+            color: #2563EB;
+        }
+
+        .segment-duration {
+            color: #64748B;
+            font-size: 12px;
+        }
+
+        .segment-cumulative {
+            font-size: 11px;
+            color: #9CA3AF;
+            margin-top: 2px;
+        }
+
+        .debug-chunks-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .chunk-item {
+            border: 1px solid #E0E7FF;
+            border-radius: 6px;
+            padding: 6px 8px;
+            background: #EEF2FF;
+            font-size: 12px;
+            color: #1E293B;
+        }
+
+        .chunk-item.session-current {
+            background: #DBEAFE;
+            border-color: #3B82F6;
+        }
+
+        .chunk-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-weight: 600;
+            color: #1D4ED8;
+        }
+
+        .chunk-meta {
+            margin-top: 2px;
+            font-size: 11px;
+            color: #475569;
+        }
+
+        .chunk-info {
+            font-size: 11px;
+            color: #94A3B8;
+            padding: 2px 0;
+        }
+
+        .debug-panel-footer {
+            padding: 12px 16px;
+            border-top: 1px solid #E5E7EB;
+            background: #F9FAFB;
+        }
+
+        .debug-summary {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .debug-summary-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .debug-label {
+            color: #64748B;
+            font-weight: 500;
+        }
+
+        .debug-value {
+            color: #1E293B;
+            font-weight: 600;
+        }
+
+        .timeline-lifetime {
+            display: block;
+            width: 100%;
+            text-align: right;
+            font-size: 12px;
+            color: #6B7280;
+            font-style: italic;
+            margin-top: 4px;
+        }
+
+        @media (max-width: 1200px) {
+            .debug-panel {
+                display: none;
+            }
+
+            .main-content {
+                margin-right: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">Flashback</div>
+        <div class="status-indicator" id="statusIndicator">
+            <div class="recording-dot" id="recordingDot" style="display: none;"></div>
+            <span id="statusText">Ready</span>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Video Preview -->
+        <div class="video-container">
+            <video id="videoPreview" autoplay muted playsinline></video>
+            <div class="video-overlay" id="videoOverlay">LIVE</div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="btn btn-primary" id="startBtn">Start Recording</button>
+            <button class="btn btn-danger" id="stopBtn" disabled>Stop</button>
+            <button class="btn btn-secondary" id="flashbackBtn" disabled>Flashback ←</button>
+            <button class="btn btn-secondary" id="forwardBtn" disabled>Forward →</button>
+        </div>
+
+        <!-- Messages -->
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+
+        <!-- Timeline -->
+        <div class="timeline-container" id="timelineContainer" style="display: none;">
+            <div class="timeline-bar-container">
+                <div class="timeline-bar" id="timelineBar">
+                    <div class="timeline-progress" id="timelineProgress"></div>
+                    <div class="timeline-position" id="timelinePosition" style="display: none;"></div>
+                </div>
+            </div>
+            <div class="timeline-time-display">
+                <div class="timeline-time-display-main">
+                    <span id="timeStart">0:00</span>
+                    <span id="timeCurrent">0:00</span>
+                    <span id="timeEnd">0:00</span>
+                </div>
+                <span id="timeLifetime" class="timeline-lifetime" style="display: none;">Total 0s</span>
+            </div>
+            <div class="timeline-legend">
+                <span class="timeline-legend-text" id="timelineLegend">Click to jump to any moment</span>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel">
+            <div class="duration-control">
+                <label for="durationRange">Max Duration:</label>
+                <input type="range" id="durationRange" min="1" max="3600" value="10">
+                <input type="number" id="durationValue" min="1" max="3600" value="10">
+                <span id="durationDisplay">10s</span>
+            </div>
+        </div>
+    </div>
+
+        <!-- Debug Panel -->
+        <div class="debug-panel" id="debugPanel">
+            <div class="debug-panel-header">
+                <h3>Analyse tampon</h3>
+            </div>
+            <div class="debug-panel-body">
+                <div class="debug-section debug-section--sessions">
+                    <div class="debug-section-title">Sessions enregistrées</div>
+                    <div class="debug-list debug-segments-list" id="debugSegmentsList">
+                        <div class="debug-empty">Aucun segment enregistré</div>
+                    </div>
+                </div>
+                <div class="debug-section debug-section--chunks">
+                    <div class="debug-section-title">Chunks tampon</div>
+                    <div class="debug-list debug-chunks-list" id="debugChunksList">
+                        <div class="debug-empty">Aucun chunk</div>
+                    </div>
+                </div>
+            </div>
+            <div class="debug-panel-footer">
+                <div class="debug-summary">
+                    <div class="debug-summary-item">
+                        <span class="debug-label">Total:</span>
+                        <span class="debug-value" id="debugTotalDuration">0.0s</span>
+                    </div>
+                    <div class="debug-summary-item">
+                        <span class="debug-label">Segments:</span>
+                        <span class="debug-value" id="debugSegmentCount">0</span>
+                    </div>
+                    <div class="debug-summary-item">
+                        <span class="debug-label">Chunks:</span>
+                        <span class="debug-value" id="debugChunkCount">0</span>
+                    </div>
+                    <div class="debug-summary-item">
+                        <span class="debug-label">Tampon:</span>
+                        <span class="debug-value" id="debugBufferDuration">0.0s</span>
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class FlashbackRecorder {
+            constructor() {
+                // DOM Elements
+                this.videoPreview = document.getElementById('videoPreview');
+                this.startBtn = document.getElementById('startBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.flashbackBtn = document.getElementById('flashbackBtn');
+                this.forwardBtn = document.getElementById('forwardBtn');
+                this.statusText = document.getElementById('statusText');
+                this.recordingDot = document.getElementById('recordingDot');
+                this.videoOverlay = document.getElementById('videoOverlay');
+                this.errorMessage = document.getElementById('errorMessage');
+                this.successMessage = document.getElementById('successMessage');
+                this.timelineContainer = document.getElementById('timelineContainer');
+                this.timelineBar = document.getElementById('timelineBar');
+                this.timelineProgress = document.getElementById('timelineProgress');
+                this.timelinePosition = document.getElementById('timelinePosition');
+                this.timeStart = document.getElementById('timeStart');
+                this.timeCurrent = document.getElementById('timeCurrent');
+                this.timeEnd = document.getElementById('timeEnd');
+                this.timeLifetime = document.getElementById('timeLifetime');
+                this.timelineLegend = document.getElementById('timelineLegend');
+                this.durationRange = document.getElementById('durationRange');
+                this.durationValue = document.getElementById('durationValue');
+                this.durationDisplay = document.getElementById('durationDisplay');
+                this.debugPanel = document.getElementById('debugPanel');
+                this.debugSegmentsList = document.getElementById('debugSegmentsList');
+                this.debugTotalDuration = document.getElementById('debugTotalDuration');
+                this.debugSegmentCount = document.getElementById('debugSegmentCount');
+                this.debugChunksList = document.getElementById('debugChunksList');
+                this.debugChunkCount = document.getElementById('debugChunkCount');
+                this.debugBufferDuration = document.getElementById('debugBufferDuration');
+                this.pendingSessionId = null;
+                this.pendingSessionChunks = [];
+
+                // State
+                this.stream = null;
+                this.mediaRecorder = null;
+                this.state = 'stopped'; // 'recording' | 'playback' | 'stopped' | 'transitioning'
+                this.recordedSessions = [];
+                this.chunkBuffer = []; // rolling buffer of individual chunks { blob, duration, mimeType, timestamp, sessionId, sequence }
+                this.currentSessionChunks = []; // chunks collectés pendant la session en cours (avant sauvegarde)
+                this.currentSessionIdCounter = 0; // identifiant auto-incrémenté pour les sessions logiques
+                this.currentChunkSequence = 0; // identifiant auto-incrémenté pour chaque chunk
+                this.currentSessionId = null; // session logique actuellement en cours d'enregistrement
+                this._bufferedDuration = 0; // durée totale cumulée des chunks présents dans le tampon
+                this._lastChunkTimestamp = null; // horodatage du dernier chunk reçu (ms)
+                this.currentSessionHeaderBlob = null; // Blob d'en-tête conservé si le premier chunk est purgé
+                this.sessionMap = new Map(); // accès direct aux sessions par identifiant
+                this.currentPlaybackIndex = 0;
+                this.playbackVideo = null;
+                this.allSessions = [];
+                this.currentReferencePosition = null;
+                this.backPressCount = 0;
+                this.forwardPressCount = 0;
+                this.backResetTimer = null;
+                this.forwardResetTimer = null;
+                this.recordingStartTime = 0;
+                this.totalRecordedTime = 0;
+                this.maxDuration = 10; // seconds
+                this.bufferMarginSeconds = 10; // marge supplémentaire pour assurer un keyframe antérieur
+                this.lifetimeRecordedDuration = 0; // Durée totale enregistrée depuis le lancement (non décroissante)
+                this.sessionBoundaries = [];
+                this._pendingRevokes = [];
+                this.activeMimeType = null; // MimeType utilisé pour les blobs
+                this._playbackId = 0; // Identifiant unique pour chaque lecture (permet d'invalider les handlers obsolètes)
+                this._playbackTimeout = null;
+                this._playbackInterval = null;
+                this._timeupdateHandler = null;
+                this._timeupdateGuardTimeout = null;
+                this._onEndedHandler = null;
+                this._onErrorHandler = null;
+                this._metadataTimeout = null;
+                this._finalizePlayback = null;
+                this.visibleWindowStart = 0;
+                this.visibleWindowEnd = 0;
+                this.visibleWindowDuration = 0;
+
+                // Exposer l'instance globale pour faciliter le debug
+                window.flashbackRecorder = this;
+
+                // Bind methods
+                this.handleBackKey = this.handleBackKey.bind(this);
+                this.handleForwardKey = this.handleForwardKey.bind(this);
+                this.handleEscapeKey = this.handleEscapeKey.bind(this);
+                this.handleTimelineClick = this.handleTimelineClick.bind(this);
+                this.onSessionEnded = this.onSessionEnded.bind(this);
+
+                // Initialize
+                this.loadSettings();
+                this.initEventListeners();
+                this.updateDurationDisplay();
+                this.updateDebugPanel(); // Initialiser l'affichage du panneau de debug
+                this.setState('recording');
+                this.startRecording(); // Auto-start as per US-001
+            }
+
+            setState(newState) {
+                const validStates = ['recording', 'playback', 'stopped', 'transitioning'];
+                if (!validStates.includes(newState)) {
+                    // console.error(`Invalid state: ${newState}`);
+                    return;
+                }
+                const oldState = this.state;
+                this.state = newState;
+                // console.debug(`[state] ${oldState} → ${newState}`);
+            }
+
+            initEventListeners() {
+                this.startBtn.addEventListener('click', () => this.startRecording());
+                this.stopBtn.addEventListener('click', () => this.stopRecording());
+                this.flashbackBtn.addEventListener('click', () => this.handleBack());
+                this.forwardBtn.addEventListener('click', () => this.handleForward());
+
+                this.durationRange.addEventListener('input', () => this.updateDurationFromRange());
+                this.durationValue.addEventListener('change', () => this.updateDurationFromInput());
+
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowLeft') this.handleBackKey();
+                    if (e.key === 'ArrowRight') this.handleForwardKey();
+                    if (e.key === 'Escape') this.handleEscapeKey();
+                });
+
+                this.timelineBar.addEventListener('click', (e) => this.handleTimelineClick(e));
+            }
+
+            loadSettings() {
+                const saved = localStorage.getItem('flashbackMaxDuration');
+                if (saved) {
+                    this.maxDuration = parseInt(saved, 10);
+                    this.durationRange.value = this.maxDuration;
+                    this.durationValue.value = this.maxDuration;
+                }
+            }
+
+            saveSettings() {
+                localStorage.setItem('flashbackMaxDuration', this.maxDuration.toString());
+            }
+
+
+            // === MISE A JOUR DE LA DUREE A DROITE DE LA REGLETTE ===  
+
+            updateDurationFromRange() {
+            /**
+             * Met à jour la durée maximale depuis le slider/range input.
+             * Cette fonction est appelée quand l'utilisateur bouge le curseur du slider.
+             * Elle synchronise la valeur avec l'input numérique et met à jour l'affichage.
+             */
+                this.maxDuration = parseInt(this.durationRange.value, 10);
+                this.durationValue.value = this.maxDuration;
+                this.updateDurationDisplay();
+                this.saveSettings();
+                this.enforceRollingBuffer();
+                this.updateDebugPanel();
+            }
+
+            updateDurationFromInput() {
+            /**
+             * Met à jour la durée maximale depuis l'input numérique.
+             * Cette fonction est appelée quand l'utilisateur tape une valeur dans le champ numérique.
+             * Elle applique des contraintes (1-3600 secondes) et synchronise avec le slider.
+             */
+                let val = parseInt(this.durationValue.value, 10);
+                if (isNaN(val) || val < 1) val = 1;
+                if (val > 3600) val = 3600;
+                this.maxDuration = val;
+                this.durationRange.value = val;
+                this.durationValue.value = val;
+                this.updateDurationDisplay();
+                this.saveSettings();
+                this.enforceRollingBuffer();
+                this.updateDebugPanel();
+            }
+
+            updateDurationDisplay() {
+            /**
+             * Met à jour l'affichage textuel de la durée maximale.
+             * Affiche la valeur actuelle de maxDuration avec l'unité "s" dans l'élément durationDisplay.
+             */
+                this.durationDisplay.textContent = `${this.maxDuration}s`;
+            }
+
+            getMaxBufferedDuration() {
+                const margin = Number.isFinite(this.bufferMarginSeconds) ? Math.max(0, this.bufferMarginSeconds) : 0;
+                const base = Number.isFinite(this.maxDuration) ? Math.max(0, this.maxDuration) : 0;
+                return base + margin;
+            }
+
+            formatDuration(seconds) {
+                if (!Number.isFinite(seconds) || seconds < 0) {
+                    return '0s';
+                }
+                if (seconds >= 3600) {
+                    const hours = Math.floor(seconds / 3600);
+                    const minutes = Math.floor((seconds % 3600) / 60);
+                    const secs = Math.floor(seconds % 60);
+                    return `${hours}h ${minutes}m ${secs}s`;
+                }
+                if (seconds >= 60) {
+                    const minutes = Math.floor(seconds / 60);
+                    const secs = Math.floor(seconds % 60);
+                    return `${minutes}m ${secs}s`;
+                }
+                if (seconds >= 10) {
+                    return `${seconds.toFixed(0)}s`;
+                }
+                return `${seconds.toFixed(1)}s`;
+            }
+
+            // === LANCEMENT ET ARRÊT ENREGISTREMENT ===
+
+            async startRecording() {
+                try {
+                    this.finalizePendingSession();
+                    // console.debug('[startRecording] Starting', { recordedSessionsCount: this.recordedSessions.length, totalRecordedTime: this.totalRecordedTime, hasStream: !!this.stream, streamState: this.stream ? this.stream.active : 'no stream' });
+                    // Nettoyer toute source blob précédente avant de démarrer
+                    if (this.videoPreview) {
+                        this.videoPreview.src = '';
+                        // Ne pas mettre srcObject à null si on a déjà un stream - on veut le réutiliser
+                        // On le réattache juste après
+                        if (this.videoPreview.srcObject && this.videoPreview.srcObject !== this.stream) {
+                            this.videoPreview.srcObject = null;
+                        }
+                    }
+                    // Ne pas obtenir un nouveau stream si on en a déjà un actif
+                    if (!this.stream || (this.stream && !this.stream.active)) {
+                        // console.debug('[startRecording] Getting new stream', { hadStream: !!this.stream, wasActive: this.stream ? this.stream.active : false });
+                        if (this.stream) {
+                            // Arrêter l'ancien stream avant d'en obtenir un nouveau
+                            this.stream.getTracks().forEach(track => track.stop());
+                        }
+                    this.stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    }
+                    // Toujours réattacher le stream pour s'assurer qu'il est actif
+                    this.videoPreview.srcObject = this.stream;
+                    this.videoOverlay.textContent = 'LIVE';
+                    this.videoOverlay.style.display = 'block';
+
+                    const options = { mimeType: 'video/webm;codecs=vp9,opus' };
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        // console.warn('VP9 not supported, falling back to VP8');
+                        options.mimeType = 'video/webm;codecs=vp8,opus';
+                    }
+                    this.activeMimeType = options.mimeType;
+
+                    // Recréer le MediaRecorder si nécessaire (il a été arrêté lors du flashback)
+                    if (!this.mediaRecorder || this.mediaRecorder.state === 'inactive') {
+                    this.mediaRecorder = new MediaRecorder(this.stream, options);
+                    this.mediaRecorder.ondataavailable = (event) => {
+                            this.handleRecordedChunk(event);
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        // console.log('MediaRecorder stopped');
+                        if (this.state !== 'transitioning') {
+                            this.saveCurrentSession();
+                        }
+                    };
+                    }
+
+                    // Start recording with 1-second chunks
+                    this.currentSessionId = ++this.currentSessionIdCounter;
+                    this.currentSessionChunks = [];
+                    this.currentSessionStartMs = Date.now();
+                    this._lastChunkTimestamp = this.currentSessionStartMs;
+                    this.currentSessionHeaderBlob = null;
+                    this.mediaRecorder.start(1000);
+                    this.setState('recording');
+                    this.recordingStartTime = this.currentSessionStartMs;
+
+                    this.updateUIForRecording();
+                    this.startTimer(); // Démarrer le timer permettant l'actualisation régulière de la barre de progression
+                } catch (err) {
+                    // console.error('Error accessing media devices:', err);
+                    this.showMessage('Camera/microphone access denied or unavailable', 'error');
+                }
+            }
+
+            stopRecording() {
+                if (this.mediaRecorder && this.state === 'recording') {
+                    this.mediaRecorder.stop();
+                    this.setState('stopped');
+                    this.stopTimer();
+                    this.saveCurrentSession();
+                    this.updateUIForStopped();
+                }
+            }
+
+            resumeRecording() {
+                // Vérifier seulement qu'on n'est pas déjà en train d'enregistrer et qu'on a un stream
+                // startRecording() gère lui-même les transitions d'état et le nettoyage
+                if (this.state !== 'recording' && this.stream) {
+                    // console.debug('[resume] Resuming recording', { currentState: this.state, recordedSessionsCount: this.recordedSessions.length, totalRecordedTime: this.totalRecordedTime });
+                    this.startRecording();
+                } else {
+                    // console.debug('[resume] Cannot resume', { state: this.state, hasStream: !!this.stream });
+                }
+            }
+
+            // === GESTION DES TOUCHES ===
+            
+            handleBackKey() {
+                this.handleBack();
+            }
+
+            handleForwardKey() {
+                this.handleForward();
+            }
+
+            handleEscapeKey() {
+                if (this.state === 'playback') {
+                    this.stopPlaybackAndResumeRecording();
+                }
+            }
+
+            // === GESTION DES FLASHBACKS ===
+
+            async handleBack() {
+                // console.log(`[${new Date().toISOString()}] BACK BUTTON PRESSED - backPressCount before: ${this.backPressCount}`);
+                // Permettre les flashbacks même pendant 'transitioning' pour contrôle immédiat
+
+                // Incrémenter le compteur dès le début pour éviter les courses de conditions
+                this.incrementBackCounter();
+                // console.log(`[${new Date().toISOString()}] BACK BUTTON PRESSED - backPressCount after increment: ${this.backPressCount}`);
+
+                // Calculer directement le targetTime
+                const backDuration = this.calculateSeekDuration(this.backPressCount);
+                // console.log(`[${new Date().toISOString()}] BACK BUTTON PRESSED - backDuration calculated: ${backDuration}s`);
+                let totalDuration = this.totalRecordedTime;
+                if (this.state === 'recording' && this.currentSessionStartMs) {
+                    const elapsed = Math.floor((Date.now() - this.currentSessionStartMs) / 1000);
+                    totalDuration += elapsed;
+                }
+
+                let targetTime;
+                if (totalDuration < backDuration) {
+                    // console.log(`Not enough data, playing from start`);
+                    this.showMessage(`Playing from beginning`, 'success');
+                    targetTime = 0;
+                } else {
+                    targetTime = Math.max(0, totalDuration - backDuration);
+                    // console.log(`Calculated target time: ${totalDuration}s - ${backDuration}s = ${targetTime}s`);
+                }
+
+                // Appeler directement seekPlayback
+                await this.seekPlayback(targetTime, {
+                    allowFromRecording: true,
+                    allowFromStopped: true
+                });
+            }
+
+            async handleForward() {
+                // Permettre les forwards même pendant 'transitioning' pour contrôle immédiat
+
+                // Incrémenter le compteur dès le début pour éviter les courses de conditions
+                this.incrementForwardCounter();
+
+                // Calculer la position cible (similaire à handleBack)
+                const forwardDuration = this.calculateSeekDuration(this.forwardPressCount);
+                let currentTotalTime = 0;
+                for (let i = 0; i < this.currentPlaybackIndex; i++) {
+                    currentTotalTime += this.allSessions[i].duration;
+                }
+                currentTotalTime += this.playbackVideo.currentTime;
+
+                const targetTime = currentTotalTime + forwardDuration;
+                const totalDuration = this.allSessions.reduce((acc, s) => acc + s.duration, 0);
+
+                // console.log(`Forward: current=${currentTotalTime}s + duration=${forwardDuration}s = target=${targetTime}s (total=${totalDuration}s)`);
+
+                // Vérification si on dépasse la fin (comme advancePlayback)
+                if (targetTime >= totalDuration) {
+                    // console.log(`Advanced beyond end - resuming recording`);
+                    this.showMessage('End of recording reached - resuming live recording', 'success');
+                    this.resumeRecordingAfterPlayback();
+                    return;
+                }
+
+                // Déléguer à seekPlayback (comme handleBack)
+                await this.seekPlayback(targetTime, {
+                    allowFromRecording: false,
+                    allowFromStopped: false
+                });
+            }
+
+            calculateSeekDuration(pressCount) {
+            /**
+             * Calcule la durée d'un flashback/avance basée sur le nombre d'appuis successifs.
+             * Utilise une progression exponentielle (1, 2, 4, 8, 16... secondes).
+             *
+             * Formule: 2^(pressCount - 1) secondes
+             * - 1er appui (pressCount=1): 2^(1-1) = 2^0 = 1 seconde
+             * - 2ème appui (pressCount=2): 2^(2-1) = 2^1 = 2 secondes
+             * - 3ème appui (pressCount=3): 2^(3-1) = 2^2 = 4 secondes
+             */
+                return Math.pow(2, pressCount - 1);
+            }
+
+            async seekPlayback(targetTime, options = {}) {
+            /**
+             * Fonction commune pour rechercher une position dans la lecture.
+             * Gère la validation, l'arrêt d'enregistrement conditionnel, et le lancement de lecture.
+             */
+                const {
+                    allowFromRecording = false,  // Permettre l'appel depuis 'recording'
+                    allowFromStopped = false     // Permettre l'appel depuis 'stopped'
+                } = options;
+
+                // console.log(`=== SEEKING PLAYBACK ===`);
+                // console.log(`Target time: ${targetTime}s, allowFromRecording: ${allowFromRecording}, allowFromStopped: ${allowFromStopped}`);
+
+                // Validation d'état
+                if (this.state === 'transitioning') {
+                    // console.log('Interrupting current transition for new seek');
+                    // Permettre l'interruption pour contrôle utilisateur immédiat
+                }
+                if (this.state !== 'playback' && !allowFromRecording && !allowFromStopped) {
+                    // console.log(`Seek ignored: invalid state ${this.state}`);
+                    return;
+                }
+                if (this.state === 'stopped' && !allowFromStopped) {
+                    // console.log('Seek ignored: stopped state not allowed');
+                    return;
+                }
+
+                // Vérification des données disponibles
+                if (this.recordedSessions.length === 0 && this.currentSessionChunks.length === 0) {
+                    // console.log(`ERROR: No recording data available`);
+                    this.showMessage('No recording data available for playback', 'error');
+                    return;
+                }
+
+                // Arrêt d'enregistrement si nécessaire et autorisé
+                if (this.state === 'recording' && allowFromRecording) {
+                    // console.log('Stopping current recording for seekPlayback operation');
+                    this.setState('transitioning');
+                    try {
+                        this.mediaRecorder.stop();
+                    } catch (e) {
+                        // console.warn('mediaRecorder.stop threw', e);
+                    }
+                    this.stopTimer();
+                    await this.waitForRecorderStop();
+                    // Sauvegarde manuelle nécessaire car onstop ne la fait pas en état 'transitioning'
+                    this.saveCurrentSession();
+                }
+
+                // Incrémenter l'identifiant de lecture pour invalider tous les handlers de l'ancienne lecture
+                // Cela doit être fait AVANT de recréer allSessions pour éviter les race conditions
+                this._playbackId++;
+
+                // Synchroniser allSessions avec recordedSessions (contient la session sauvegardée si on était en recording)
+                this.allSessions = [...this.recordedSessions];
+
+                // DEBUG: Inspecter l'état des sessions avant calcul totalDuration
+                // console.log('[DEBUG seekPlayback] Session state before totalDuration calc:', {
+                //     recordedSessionsCount: this.recordedSessions.length,
+                //     allSessionsCount: this.allSessions.length,
+                //     recordedSessions: this.recordedSessions.map((s, i) => ({
+                //         index: i,
+                //         estimatedDuration: s.estimatedDuration,
+                //         blobSize: s.blob ? s.blob.size : 'no blob',
+                //         hasBlobUrl: !!s.blobUrl
+                //     })),
+                //     allSessions: this.allSessions.map((s, i) => ({
+                //         index: i,
+                //         estimatedDuration: s.estimatedDuration,
+                //         blobSize: s.blob ? s.blob.size : 'no blob',
+                //         hasBlobUrl: !!s.blobUrl
+                //     })),
+                //     currentSessionChunksCount: this.currentSessionChunks.length,
+                //     totalRecordedTime: this.totalRecordedTime,
+                //     state: this.state
+                // });
+
+                // Validation du targetTime par rapport à la durée totale disponible
+                let totalDuration = this.allSessions.reduce((acc, s) => acc + s.duration, 0); // Somme les durées de toutes les sessions
+                // console.log(`[DEBUG seekPlayback] totalDuration calculation: ${totalDuration}s (from ${this.allSessions.length} sessions)`);
+                const validatedTargetTime = Math.max(0, Math.min(targetTime, totalDuration));
+                // console.log(`totalDuration: ${totalDuration}s, targetTime: ${targetTime}s`);
+                
+                if (validatedTargetTime !== targetTime) {
+                    // console.warn(`targetTime ${targetTime}s clamped to ${validatedTargetTime}s (totalDuration: ${totalDuration}s)`);
+                }
+
+                // console.log(`Seeking flashback to validated time: ${validatedTargetTime}s`);
+                this.currentReferencePosition = validatedTargetTime;
+
+                // Lancement de la lecture
+                this.playSessionsFromTimestamp(validatedTargetTime);
+            }
+
+            calculateTargetTime(clickPercentOfTimeline, rect, totalDuration) {
+                /**
+                * Calcule le timestamp cible en fonction de la position du clic sur la timeline.
+                * Utilise la même logique pour recording et playback : calcul par rapport à la largeur effective
+                * de la barre verte avec gestion de l'overflow.
+                 */
+            
+                // Calcul de la largeur effective de la barre verte (même logique que updateTimeline)
+                const visibleWindowDuration = Math.max(this.visibleWindowDuration || 0, 0);
+                const effectiveBarWidthPercent = this.maxDuration > 0 ? Math.min((visibleWindowDuration / this.maxDuration) * 100, 100) : 100;
+                const effectiveBarWidthPx = (effectiveBarWidthPercent / 100) * rect.width;
+
+                // Convertir clickPercentOfTimeline en position x (pixels)
+                const x = clickPercentOfTimeline * rect.width;
+
+                // Calculer percent relatif à la largeur effective
+                let percent;
+                if (x <= effectiveBarWidthPx) {
+                    // Clic sur la barre verte : calculer par rapport à la barre verte
+                    percent = effectiveBarWidthPx > 0 ? x / effectiveBarWidthPx : 0;
+                    // console.debug('[timeline] Click on green bar', { x, effectiveBarWidthPx, effectiveBarWidthPercent, percent });
+                } else {
+                    // Clic sur partie grise : traiter comme 100% de la barre verte
+                    percent = 1.0;
+                    // console.debug('[timeline] Click on gray area (beyond green bar), treating as 100%', { x, effectiveBarWidthPx });
+                }
+
+                const absoluteStart = this.visibleWindowStart ?? Math.max(0, this.lifetimeRecordedDuration - visibleWindowDuration);
+                const windowSpan = Math.max(visibleWindowDuration, 0);
+                if (windowSpan <= 0) {
+                    return absoluteStart;
+                }
+                const absoluteTarget = absoluteStart + (percent * windowSpan);
+                // console.log(`Timeline click: percent=${percent}, absoluteStart=${absoluteStart}, windowSpan=${windowSpan}, target=${absoluteTarget}`);
+                return absoluteTarget;
+            }
+
+            incrementBackCounter() {
+                // console.log(`[${new Date().toISOString()}] incrementBackCounter - before: ${this.backPressCount}`);
+                this.backPressCount++;
+                // console.log(`[${new Date().toISOString()}] incrementBackCounter - after: ${this.backPressCount}`);
+                this.updateCounterDisplay();
+                clearTimeout(this.backResetTimer);
+                this.backResetTimer = setTimeout(() => {
+                    // console.log(`[${new Date().toISOString()}] backPressCount reset to 0`);
+                    this.backPressCount = 0;
+                    this.updateCounterDisplay();
+                }, 500);
+            }
+
+            incrementForwardCounter() {
+                this.forwardPressCount++;
+                clearTimeout(this.forwardResetTimer);
+                this.forwardResetTimer = setTimeout(() => {
+                    this.forwardPressCount = 0;
+                }, 500);
+            }
+
+            updateCounterDisplay() {
+                if (!this.counterDisplay) {
+                    return;
+                }
+                const duration = Math.pow(2, this.backPressCount);
+                this.counterDisplay.textContent = `← ${this.backPressCount} press${this.backPressCount !== 1 ? 'es' : ''} = ${duration}s back`;
+            }
+
+            updateDebugPanel() {
+                if (!this.debugSegmentsList) return;
+
+                const sessionIndexById = new Map();
+                this.recordedSessions.forEach((session, index) => {
+                    if (session && typeof session.id !== 'undefined') {
+                        sessionIndexById.set(session.id, index);
+                    }
+                });
+
+                // === Sessions ===
+                this.debugSegmentsList.innerHTML = '';
+
+                if (this.recordedSessions.length === 0) {
+                    const emptyMsg = document.createElement('div');
+                    emptyMsg.className = 'debug-empty';
+                    emptyMsg.textContent = 'Aucun segment enregistré';
+                    this.debugSegmentsList.appendChild(emptyMsg);
+                } else {
+                    this.recordedSessions.forEach((session, index) => {
+                        const segmentItem = document.createElement('div');
+                        segmentItem.className = 'segment-item';
+
+                        if (this.state === 'playback' && this.currentPlaybackIndex === index) {
+                            segmentItem.classList.add('playing');
+                        }
+
+                        const header = document.createElement('div');
+                        header.className = 'segment-item-header';
+
+                        const segmentNumber = document.createElement('span');
+                        segmentNumber.className = 'segment-number';
+                        segmentNumber.textContent = `Segment ${index + 1}`;
+
+                        const segmentDuration = document.createElement('span');
+                        segmentDuration.className = 'segment-duration';
+                        segmentDuration.textContent = `${(session.duration || 0).toFixed(1)}s`;
+
+                        header.appendChild(segmentNumber);
+                        header.appendChild(segmentDuration);
+
+                        const cumulative = document.createElement('div');
+                        cumulative.className = 'segment-cumulative';
+                        cumulative.textContent = `Cumulé: ${session.endTime.toFixed(1)}s`;
+
+                        segmentItem.appendChild(header);
+                        segmentItem.appendChild(cumulative);
+                        this.debugSegmentsList.appendChild(segmentItem);
+                    });
+                }
+
+                // === Chunks ===
+                if (this.debugChunksList) {
+                    this.debugChunksList.innerHTML = '';
+                    if (this.chunkBuffer.length === 0) {
+                        const emptyChunks = document.createElement('div');
+                        emptyChunks.className = 'debug-empty';
+                        emptyChunks.textContent = 'Aucun chunk';
+                        this.debugChunksList.appendChild(emptyChunks);
+                    } else {
+                        const MAX_CHUNKS_DISPLAY = 60;
+                        const startIndex = Math.max(0, this.chunkBuffer.length - MAX_CHUNKS_DISPLAY);
+                        const displayedChunks = this.chunkBuffer.slice(startIndex);
+
+                        if (startIndex > 0) {
+                            const info = document.createElement('div');
+                            info.className = 'chunk-info';
+                            info.textContent = `… ${startIndex} chunk${startIndex > 1 ? 's' : ''} masqué${startIndex > 1 ? 's' : ''}`;
+                            this.debugChunksList.appendChild(info);
+                        }
+
+                        const currentPlaybackSession = (this.state === 'playback' && this.currentPlaybackIndex < this.allSessions.length)
+                            ? this.allSessions[this.currentPlaybackIndex]?.id
+                            : null;
+
+                        displayedChunks.forEach(chunk => {
+                            const chunkItem = document.createElement('div');
+                            chunkItem.className = 'chunk-item';
+
+                            const isPlaybackChunk = currentPlaybackSession !== null && chunk.sessionId === currentPlaybackSession;
+                            const isLiveChunk = this.state === 'recording' && chunk.sessionId === this.currentSessionId;
+                            if (isPlaybackChunk || isLiveChunk) {
+                                chunkItem.classList.add('session-current');
+                            }
+
+                            const header = document.createElement('div');
+                            header.className = 'chunk-header';
+
+                            const title = document.createElement('span');
+                            title.textContent = `Chunk ${chunk.id}`;
+
+                            const duration = document.createElement('span');
+                            duration.textContent = `${(chunk.duration || 0).toFixed(1)}s`;
+
+                            header.appendChild(title);
+                            header.appendChild(duration);
+
+                            const meta = document.createElement('div');
+                            meta.className = 'chunk-meta';
+
+                            let sessionLabel = '—';
+                            if (sessionIndexById.has(chunk.sessionId)) {
+                                sessionLabel = `S${sessionIndexById.get(chunk.sessionId) + 1}`;
+                            } else if (chunk.sessionId && chunk.sessionId === this.currentSessionId) {
+                                sessionLabel = 'Live';
+                            } else if (chunk.sessionId) {
+                                sessionLabel = `#${chunk.sessionId}`;
+                            }
+
+                            meta.textContent = `Session: ${sessionLabel} • ${this.formatClockTime(chunk.createdAt)}`;
+
+                            chunkItem.appendChild(header);
+                            chunkItem.appendChild(meta);
+                            this.debugChunksList.appendChild(chunkItem);
+                        });
+                    }
+                }
+
+                // === Résumé ===
+                if (this.debugTotalDuration) {
+                    this.debugTotalDuration.textContent = `${this.totalRecordedTime.toFixed(1)}s`;
+                }
+                if (this.debugSegmentCount) {
+                    this.debugSegmentCount.textContent = this.recordedSessions.length.toString();
+                }
+                if (this.debugChunkCount) {
+                    this.debugChunkCount.textContent = this.chunkBuffer.length.toString();
+                }
+                if (this.debugBufferDuration) {
+                    this.debugBufferDuration.textContent = `${this._bufferedDuration.toFixed(1)}s`;
+                }
+            }
+
+            startTimer() {
+                this.timerInterval = setInterval(() => {
+                    this.updateTimeline();
+                }, 200);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+            }
+
+            handleRecordedChunk(event) {
+                if (!event || !event.data || event.data.size === 0) {
+                    return;
+                }
+
+                const now = Date.now();
+                let duration = 1;
+                if (this._lastChunkTimestamp !== null) {
+                    duration = Math.max(0.1, (now - this._lastChunkTimestamp) / 1000);
+                }
+                this._lastChunkTimestamp = now;
+
+                const absoluteStart = this.lifetimeRecordedDuration;
+                const absoluteEnd = absoluteStart + duration;
+                this.lifetimeRecordedDuration = absoluteEnd;
+
+                let targetSessionId = this.currentSessionId;
+                let isCurrentSession = true;
+                if (targetSessionId === null && this.pendingSessionId !== null) {
+                    targetSessionId = this.pendingSessionId;
+                    isCurrentSession = false;
+                }
+
+                const isFirstChunkOfCurrentSession = isCurrentSession && this.currentSessionChunks.length === 0;
+
+                const chunk = {
+                    id: ++this.currentChunkSequence,
+                    blob: event.data,
+                    duration,
+                    mimeType: event.data.type || this.activeMimeType || 'video/webm',
+                    sessionId: targetSessionId,
+                    createdAt: now,
+                    isSessionHeader: isFirstChunkOfCurrentSession,
+                    isPreRoll: false,
+                    absoluteStart,
+                    absoluteEnd
+                };
+
+                if (isFirstChunkOfCurrentSession && event.data) {
+                    this.currentSessionHeaderBlob = event.data;
+                }
+
+                this.chunkBuffer.push(chunk);
+                this._bufferedDuration += duration;
+
+                let sessionUpdated = false;
+
+                if (isCurrentSession && this.currentSessionId !== null) {
+                    this.currentSessionChunks.push(chunk);
+                } else if (!isCurrentSession && this.pendingSessionId !== null) {
+                    this.pendingSessionChunks.push(chunk);
+                    const pendingSession = this.sessionMap.get(this.pendingSessionId);
+                    if (pendingSession) {
+                        pendingSession.chunks.push(chunk);
+                        sessionUpdated = true;
+                    }
+                    if (this.state !== 'recording' && (!this.mediaRecorder || this.mediaRecorder.state !== 'recording')) {
+                        this.finalizePendingSession();
+                        sessionUpdated = false;
+                    }
+                }
+
+                this.enforceRollingBuffer();
+
+                if (sessionUpdated) {
+                    this.recomputeSessionBoundaries();
+                }
+
+                if (this.state === 'recording') {
+                    this.updateTimeline();
+                }
+                this.updateDebugPanel();
+            }
+
+            removeChunksFromBuffer(chunks) {
+                if (!Array.isArray(chunks) || chunks.length === 0) {
+                    return;
+                }
+                const idsToRemove = new Set(chunks.map(chunk => chunk.id));
+                if (this.currentSessionChunks.length > 0) {
+                    this.currentSessionChunks = this.currentSessionChunks.filter(chunk => !idsToRemove.has(chunk.id));
+                }
+                this.chunkBuffer = this.chunkBuffer.filter(chunk => {
+                    if (idsToRemove.has(chunk.id)) {
+                        let preservedHeader = false;
+                        if (chunk.sessionId) {
+                            const session = this.sessionMap.get(chunk.sessionId);
+                            if (chunk.isSessionHeader && chunk.sessionId === this.currentSessionId && !this.currentSessionHeaderBlob && chunk.blob) {
+                                this.currentSessionHeaderBlob = chunk.blob;
+                                preservedHeader = true;
+                            }
+                            if (session && chunk.isSessionHeader && chunk.blob && !session.headerBlob) {
+                                session.headerBlob = chunk.blob;
+                                preservedHeader = true;
+                            }
+                        }
+                        this._bufferedDuration = Math.max(0, this._bufferedDuration - (chunk.duration || 0));
+                        if (!preservedHeader) {
+                            chunk.blob = null;
+                        }
+                        return false;
+                    }
+                    return true;
+                });
+                if (this.pendingSessionChunks.length > 0) {
+                    this.pendingSessionChunks = this.pendingSessionChunks.filter(chunk => !idsToRemove.has(chunk.id));
+                    if (this.pendingSessionChunks.length === 0 && this.pendingSessionId) {
+                        this.finalizePendingSession();
+                    }
+                }
+                this.updateDebugPanel();
+            }
+
+            refreshSessionBounds(session) {
+                if (!session || !Array.isArray(session.chunks)) {
+                    return;
+                }
+                const chunks = session.chunks.filter(Boolean);
+                if (chunks.length === 0) {
+                    session.absoluteStart = session.absoluteStart ?? this.lifetimeRecordedDuration;
+                    session.absoluteEnd = session.absoluteStart;
+                    session.visibleStartAbs = session.absoluteEnd;
+                    session.visibleEndAbs = session.absoluteEnd;
+                    session.duration = 0;
+                    session.preRollDuration = 0;
+                    session.chunkCount = 0;
+                    return;
+                }
+                chunks.sort((a, b) => (a.absoluteStart || 0) - (b.absoluteStart || 0));
+                session.absoluteStart = chunks[0].absoluteStart ?? session.absoluteStart ?? 0;
+                session.absoluteEnd = chunks[chunks.length - 1].absoluteEnd ?? session.absoluteEnd ?? session.absoluteStart;
+
+                let visibleStartAbs = null;
+                let visibleEndAbs = null;
+                let visibleDuration = 0;
+                let preRollDuration = 0;
+                let visibleChunkCount = 0;
+
+                chunks.forEach(chunk => {
+                    const chunkDuration = chunk.duration || 0;
+                    const chunkEnd = chunk.absoluteEnd ?? ((chunk.absoluteStart || 0) + chunkDuration);
+                    if (chunk.isPreRoll) {
+                        preRollDuration += chunkDuration;
+                    } else {
+                        visibleDuration += chunkDuration;
+                        visibleChunkCount += 1;
+                        if (visibleStartAbs === null) {
+                            visibleStartAbs = chunk.absoluteStart ?? session.absoluteStart;
+                        }
+                        visibleEndAbs = chunkEnd;
+                    }
+                });
+
+                session.preRollDuration = preRollDuration;
+                session.duration = visibleDuration;
+                session.chunkCount = visibleChunkCount;
+                session.visibleStartAbs = visibleStartAbs ?? session.absoluteEnd;
+                session.visibleEndAbs = visibleEndAbs ?? session.visibleStartAbs;
+            }
+
+            updateUIForRecording() {
+                this.startBtn.disabled = true;
+                this.stopBtn.disabled = false;
+                this.flashbackBtn.disabled = false;
+                this.forwardBtn.disabled = true;
+                this.recordingDot.style.display = 'block';
+                this.statusText.textContent = 'REC';
+                this.timelineContainer.style.display = 'block';
+                this.timelineLegend.textContent = '';
+                // Masquer le curseur rouge pendant l'enregistrement
+                this.timelinePosition.style.display = 'none';
+            }
+
+            updateUIForPlayback() {
+                this.startBtn.disabled = true;
+                this.stopBtn.disabled = true;
+                this.flashbackBtn.disabled = false;
+                this.forwardBtn.disabled = false;
+                this.recordingDot.style.display = 'none';
+                this.statusText.textContent = 'PLAYBACK';
+                this.videoOverlay.style.display = 'none';
+                // Ne pas remettre les compteurs à 0 pour permettre les flashbacks multiples continus
+                // this.backPressCount = 0;
+                // this.forwardPressCount = 0;
+                // this.updateCounterDisplay();
+                this.timelinePosition.style.display = 'block';
+                this.timelineLegend.textContent = 'Click timeline to jump • ←/→ to navigate';
+                // S'assurer que la timeline est visible en mode lecture
+                this.timelineContainer.style.display = 'block';
+            }
+
+            updateUIForStopped() {
+                this.startBtn.disabled = false;
+                this.stopBtn.disabled = true;
+                this.flashbackBtn.disabled = true;
+                this.forwardBtn.disabled = true;
+                this.recordingDot.style.display = 'none';
+                this.statusText.textContent = 'Stopped';
+                this.timelineContainer.style.display = 'none';
+                // Masquer le curseur rouge quand on est arrêté
+                this.timelinePosition.style.display = 'none';
+            }
+
+            saveCurrentSession() {
+                this.debugLogState('save:start', {
+                    currentSessionId: this.currentSessionId,
+                    currentChunks: this.currentSessionChunks.length
+                });
+                /**
+                 * Sauvegarde la session d'enregistrement en cours en créant une session logique
+                 * basée sur les chunks individuels stockés dans le tampon.
+                 * 
+                 * Cette fonction est appelée :
+                 * - Lors d'un arrêt manuel de l'enregistrement (stopRecording)
+                 * - Lors d'un flashback (startFlashbackPlayback) pour sauvegarder la session en cours
+                 */
+                this.finalizePendingSession();
+
+                if (this.currentSessionChunks.length === 0) {
+                    this.currentSessionStartMs = null;
+                    this.currentSessionId = null;
+                    this._lastChunkTimestamp = null;
+                    this.currentSessionHeaderBlob = null;
+                    return;
+                }
+
+                const sessionChunks = [...this.currentSessionChunks];
+                const sessionDuration = sessionChunks.reduce((sum, chunk) => sum + (chunk.duration || 0), 0);
+                const totalBytes = sessionChunks.reduce((sum, chunk) => sum + ((chunk.blob && chunk.blob.size) || 0), 0);
+
+                const MIN_DURATION = 0.5; // secondes
+                const MIN_BLOB_SIZE = 5000; // octets
+
+                if (sessionDuration < MIN_DURATION || totalBytes < MIN_BLOB_SIZE) {
+                    this.removeChunksFromBuffer(sessionChunks);
+                    this.currentSessionChunks = [];
+                    this.currentSessionStartMs = null;
+                    this.currentSessionId = null;
+                    this._lastChunkTimestamp = null;
+                    this.pendingSessionId = null;
+                    this.pendingSessionChunks = [];
+                    this.currentSessionHeaderBlob = null;
+                    return;
+                }
+
+                const sessionId = this.currentSessionId ?? ++this.currentSessionIdCounter;
+
+                const session = {
+                    id: sessionId,
+                    chunks: sessionChunks,
+                    chunkCount: sessionChunks.length,
+                    duration: sessionDuration,
+                    playableDuration: sessionDuration,
+                    startTime: 0,
+                    endTime: 0,
+                    mimeType: this.activeMimeType || 'video/webm',
+                    createdAt: Date.now(),
+                    blobUrl: null,
+                    headerBlob: null,
+                    preRollDuration: 0
+                };
+
+                const headerChunk = sessionChunks.find(chunk => chunk.isSessionHeader);
+                if (headerChunk && headerChunk.blob) {
+                    session.headerBlob = headerChunk.blob;
+                } else if (this.currentSessionHeaderBlob) {
+                    session.headerBlob = this.currentSessionHeaderBlob;
+                }
+
+                sessionChunks.forEach(chunk => {
+                    chunk.sessionId = sessionId;
+                });
+                session.absoluteStart = sessionChunks[0]?.absoluteStart ?? this.lifetimeRecordedDuration;
+                session.absoluteEnd = sessionChunks[sessionChunks.length - 1]?.absoluteEnd ?? session.absoluteStart;
+                session.visibleStartAbs = session.absoluteStart;
+                session.visibleEndAbs = session.absoluteEnd;
+                this.refreshSessionBounds(session);
+
+                this.recordedSessions.push(session);
+                this.sessionMap.set(sessionId, session);
+
+                this.currentSessionChunks = [];
+                this.currentSessionStartMs = null;
+                this.currentSessionId = null;
+                this._lastChunkTimestamp = null;
+                this.pendingSessionId = sessionId;
+                this.pendingSessionChunks = [];
+                this.currentSessionHeaderBlob = null;
+
+                this.recomputeSessionBoundaries();
+                this.trimBufferToMaxDuration();
+                this.allSessions = [...this.recordedSessions];
+                this.enforceRollingBuffer();
+                this.updateDebugPanel();
+                this.updateTimeline();
+                this.debugLogState('save:end', { newSessionId: sessionId });
+            }
+
+            enforceRollingBuffer() {
+                const maxBufferedDuration = this.getMaxBufferedDuration();
+                if (!Number.isFinite(maxBufferedDuration) || maxBufferedDuration <= 0) {
+                    return;
+                }
+
+                let removedAny = false;
+
+                while (this._bufferedDuration > maxBufferedDuration && this.chunkBuffer.length > 0) {
+                    const removed = this.chunkBuffer.shift();
+                    removedAny = true;
+                    const duration = removed?.duration || 0;
+                    this._bufferedDuration = Math.max(0, this._bufferedDuration - duration);
+
+                    if (removed && removed.isSessionHeader && removed.sessionId === this.currentSessionId && !this.currentSessionHeaderBlob && removed.blob) {
+                        this.currentSessionHeaderBlob = removed.blob;
+                    }
+
+                    if (removed && this.currentSessionChunks.length > 0) {
+                        const before = this.currentSessionChunks.length;
+                        this.currentSessionChunks = this.currentSessionChunks.filter(chunk => chunk.id !== removed.id);
+                        if (before !== this.currentSessionChunks.length) {
+                            this.debugLogState('enforce:trim-current', { removedChunkId: removed.id });
+                        }
+                    }
+
+                    let preservedHeader = false;
+                    if (removed && removed.sessionId) {
+                        const session = this.sessionMap.get(removed.sessionId);
+                        const removedBlob = removed.blob;
+                        if (session && removed.isSessionHeader && removedBlob && !session.headerBlob) {
+                            session.headerBlob = removedBlob;
+                            preservedHeader = true;
+                        }
+                        if (session) {
+                            if (session.chunks && session.chunks.length > 0) {
+                                if (session.chunks[0].id === removed.id) {
+                                    session.chunks.shift();
+                        } else {
+                                    session.chunks = session.chunks.filter(chunk => chunk.id !== removed.id);
+                                }
+                            }
+                            this.refreshSessionBounds(session);
+                            if ((session.duration || 0) <= 0) {
+                                session._remove = true;
+                                this.sessionMap.delete(session.id);
+                            } else {
+                                session._dirty = true;
+                            }
+                        }
+                    }
+
+                    if (removed) {
+                        if (this.pendingSessionChunks.length > 0) {
+                            this.pendingSessionChunks = this.pendingSessionChunks.filter(chunk => chunk.id !== removed.id);
+                            if (this.pendingSessionChunks.length === 0 && this.pendingSessionId === removed.sessionId) {
+                                this.finalizePendingSession();
+                            }
+                        }
+                        if (!preservedHeader) {
+                            removed.blob = null;
+                        }
+                    }
+                }
+
+                if (removedAny) {
+                    this.recordedSessions = this.recordedSessions.filter(session => {
+                        if (session._remove) {
+                            if (this.pendingSessionId === session.id) {
+                                this.pendingSessionId = null;
+                                this.pendingSessionChunks = [];
+                            }
+                            if (session.blobUrl) {
+                                try { URL.revokeObjectURL(session.blobUrl); } catch (e) { /* noop */ }
+                                session.blobUrl = null;
+                            }
+                            session.headerBlob = null;
+                            return false;
+                        }
+                        if (session._dirty) {
+                            this.refreshSessionBounds(session);
+                    session.playableDuration = session.duration;
+                            delete session._dirty;
+                        }
+                        return (session.duration || 0) > 0;
+                    });
+
+                    this.recomputeSessionBoundaries();
+                    this.allSessions = [...this.recordedSessions];
+
+                    if (this.currentPlaybackIndex >= this.recordedSessions.length) {
+                        this.currentPlaybackIndex = Math.max(0, this.recordedSessions.length - 1);
+                    }
+
+                    this.updateDebugPanel();
+                    this.updateTimeline();
+                }
+            }
+
+            recomputeSessionBoundaries() {
+                this.updatePreRollStateFromBuffer();
+
+                let cumulative = 0;
+                const newBoundaries = [];
+                const cleanedSessions = [];
+                let globalVisibleStart = null;
+                let globalVisibleEnd = null;
+
+                for (const session of this.recordedSessions) {
+                    if (!session.chunks || session.chunks.length === 0) {
+                        if (this.pendingSessionId === session.id) {
+                            this.pendingSessionId = null;
+                            this.pendingSessionChunks = [];
+                        }
+                        this.sessionMap.delete(session.id);
+                        continue;
+                    }
+
+                    const visibleDuration = session.duration || 0;
+                    session.playableDuration = visibleDuration;
+
+                    if (visibleDuration <= 0) {
+                        this.sessionMap.delete(session.id);
+                        continue;
+                    }
+
+                    session.startTime = cumulative;
+                    cumulative += visibleDuration;
+                    session.endTime = cumulative;
+
+                    cleanedSessions.push(session);
+                    newBoundaries.push(cumulative);
+
+                    const sessionVisibleStart = session.visibleStartAbs ?? session.absoluteStart ?? 0;
+                    const sessionVisibleEnd = session.visibleEndAbs ?? sessionVisibleStart;
+                    if (globalVisibleStart === null || sessionVisibleStart < globalVisibleStart) {
+                        globalVisibleStart = sessionVisibleStart;
+                    }
+                    if (globalVisibleEnd === null || sessionVisibleEnd > globalVisibleEnd) {
+                        globalVisibleEnd = sessionVisibleEnd;
+                    }
+                }
+
+                this.recordedSessions = cleanedSessions;
+                this.sessionBoundaries = newBoundaries;
+                this.visibleWindowStart = globalVisibleStart ?? this.lifetimeRecordedDuration;
+                this.visibleWindowEnd = globalVisibleEnd ?? this.visibleWindowStart;
+                this.visibleWindowDuration = Math.max(0, this.visibleWindowEnd - this.visibleWindowStart);
+                this.totalRecordedTime = Math.min(this.visibleWindowDuration, this.maxDuration);
+            }
+
+            showMessage(text, type) {
+                const msgEl = type === 'error' ? this.errorMessage : this.successMessage;
+                const hideEl = type === 'error' ? this.successMessage : this.errorMessage;
+                hideEl.style.display = 'none';
+                msgEl.textContent = text;
+                msgEl.style.display = 'block';
+                setTimeout(() => {
+                    msgEl.style.display = 'none';
+                }, 3000);
+            }
+
+            formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            formatClockTime(ms) {
+                if (!ms) return '—';
+                const date = new Date(ms);
+                try {
+                    return date.toLocaleTimeString('fr-FR', { hour12: false });
+                } catch (e) {
+                    return date.toTimeString().split(' ')[0];
+                }
+            }
+
+            debugLogState(label, extra = {}) {
+                try {
+                    const sessionsSnapshot = this.recordedSessions.map((s, idx) => ({
+                        idx,
+                        id: s.id,
+                        duration: Number((s.duration || 0).toFixed(2)),
+                        chunkCount: s.chunkCount,
+                        start: Number((s.startTime || 0).toFixed(2)),
+                        end: Number((s.endTime || 0).toFixed(2))
+                    }));
+                    console.log(`[debug:${label}]`, {
+                        buffered: Number(this._bufferedDuration.toFixed(2)),
+                        maxDuration: this.maxDuration,
+                        lifetimeRecordedDuration: Number(this.lifetimeRecordedDuration.toFixed(2)),
+                        chunkBufferLength: this.chunkBuffer.length,
+                        pendingSessionId: this.pendingSessionId,
+                        pendingChunks: this.pendingSessionChunks.length,
+                        totalRecordedTime: Number(this.totalRecordedTime.toFixed(2)),
+                        sessions: sessionsSnapshot,
+                        ...extra
+                    });
+                } catch (e) {
+                    console.warn('[debug:error logging state]', e);
+                }
+            }
+
+            finalizePendingSession() {
+                this.debugLogState('finalize:start');
+                if (!this.pendingSessionId) return;
+                const pendingId = this.pendingSessionId;
+                const session = this.sessionMap.get(pendingId);
+                if (session) {
+                    this.refreshSessionBounds(session);
+                    session.playableDuration = session.duration;
+                }
+                this.pendingSessionId = null;
+                this.pendingSessionChunks = [];
+                this.recomputeSessionBoundaries();
+                this.trimBufferToMaxDuration();
+                this.enforceRollingBuffer();
+                this.updateDebugPanel();
+                this.updateTimeline();
+                this.debugLogState('finalize:end');
+            }
+            trimBufferToMaxDuration() {
+                let changed = false;
+                this.debugLogState('trim:start');
+                const maxBufferedDuration = this.getMaxBufferedDuration();
+                if (!Number.isFinite(maxBufferedDuration) || maxBufferedDuration <= 0) {
+                    this.debugLogState('trim:skip-invalid-max', { maxBufferedDuration });
+                    return;
+                }
+                while (this._bufferedDuration > maxBufferedDuration && this.chunkBuffer.length > 0) {
+                    const oldest = this.chunkBuffer.shift();
+                    if (!oldest) {
+                        break;
+                    }
+                    const reduction = oldest.duration || 0;
+                    if (reduction <= 0) {
+                        this.debugLogState('trim:skip-zero-duration', { chunkId: oldest.id });
+                        continue;
+                    }
+                    changed = true;
+                    this._bufferedDuration = Math.max(0, this._bufferedDuration - reduction);
+
+                    if (this.currentSessionChunks.length > 0) {
+                        const before = this.currentSessionChunks.length;
+                        this.currentSessionChunks = this.currentSessionChunks.filter(chunk => chunk.id !== oldest.id);
+                        if (before !== this.currentSessionChunks.length) {
+                            this.debugLogState('trim:trim-current', { removedChunkId: oldest.id });
+                        }
+                    }
+
+                    const session = oldest.sessionId ? this.sessionMap.get(oldest.sessionId) : null;
+                    const chunkBlob = oldest.blob;
+                    let preservedHeader = false;
+                    if (oldest.isSessionHeader && oldest.sessionId === this.currentSessionId && !this.currentSessionHeaderBlob && chunkBlob) {
+                        this.currentSessionHeaderBlob = chunkBlob;
+                        preservedHeader = true;
+                    }
+                    if (session && oldest.isSessionHeader && chunkBlob && !session.headerBlob) {
+                        session.headerBlob = chunkBlob;
+                        preservedHeader = true;
+                    }
+                    if (session && session.chunks) {
+                        session.chunks = session.chunks.filter(chunk => chunk.id !== oldest.id);
+                        this.refreshSessionBounds(session);
+                        if ((session.duration || 0) <= 0) {
+                            session._remove = true;
+                        } else {
+                            session._dirty = true;
+                        }
+                    }
+
+                    if (this.pendingSessionChunks.length > 0) {
+                        this.pendingSessionChunks = this.pendingSessionChunks.filter(chunk => chunk.id !== oldest.id);
+                        if (this.pendingSessionChunks.length === 0 && this.pendingSessionId === oldest.sessionId) {
+                            this.pendingSessionId = null;
+                        }
+                    }
+
+                    if (!preservedHeader) {
+                        oldest.blob = null;
+                    }
+                }
+                if (changed) {
+                    this.recomputeSessionBoundaries();
+                    this.allSessions = [...this.recordedSessions];
+                    this.updateDebugPanel();
+                    this.updateTimeline();
+                    this.debugLogState('trim:end:changed');
+                } else {
+                    this.debugLogState('trim:end:unchanged');
+                }
+            }
+
+            updatePreRollStateFromBuffer() {
+                let remainingVisible = this.maxDuration;
+                if (!Number.isFinite(remainingVisible) || remainingVisible <= 0) {
+                    remainingVisible = 0;
+                }
+                for (let i = this.chunkBuffer.length - 1; i >= 0; i--) {
+                    const chunk = this.chunkBuffer[i];
+                    if (!chunk) continue;
+                    const duration = chunk.duration || 0;
+                    if (remainingVisible > 0) {
+                        chunk.isPreRoll = false;
+                        remainingVisible = Math.max(0, remainingVisible - duration);
+                    } else {
+                        chunk.isPreRoll = true;
+                    }
+                }
+
+                for (const session of this.recordedSessions) {
+                    this.refreshSessionBounds(session);
+                }
+            }
+
+            updateTimeline() {
+                // Note : cette fonction peut être appelée dans n'importe quel état.
+                // En état 'stopped' ou 'transitioning', elle affichera simplement la timeline
+                // avec les données disponibles (durée totale enregistrée, etc.).
+                // Si la timeline est masquée (updateUIForStopped), les mises à jour DOM n'ont pas d'effet visuel.
+
+                // Timestamp pour diagnostiquer la fréquence des updates
+                const timestamp = new Date().toISOString();
+
+                const lifetimeDuration = this.lifetimeRecordedDuration;
+                const visibleDuration = this.visibleWindowDuration || 0;
+                let progressPercent = this.maxDuration > 0 ? (visibleDuration / this.maxDuration) * 100 : 0;
+                progressPercent = Math.min(Math.max(progressPercent, 0), 100);
+
+                let currentTime = 0;
+                if (this.state === 'playback') {
+                    if (Array.isArray(this.allSessions)) {
+                        for (let i = 0; i < this.currentPlaybackIndex; i++) {
+                            currentTime += this.allSessions[i]?.duration || 0;
+                        }
+                    }
+                    if (this.playbackVideo) {
+                        currentTime += this.playbackVideo.currentTime || 0;
+                    }
+                    currentTime = Math.min(currentTime, visibleDuration);
+                } else if (this.state === 'recording') {
+                    currentTime = Math.min(visibleDuration, this.maxDuration);
+                } else {
+                    currentTime = Math.min(visibleDuration, this.maxDuration);
+                }
+
+                // DEBUG logs
+                // console.debug(`[${timestamp}] [timeline] state`, {
+                //     state: this.state,
+                //     totalDuration: visibleDuration,
+                //     currentTime,
+                //     maxDuration: this.maxDuration
+                // });
+
+                // Mettre à jour la barre verte (progress)
+                const effectiveBarWidthPercent = Math.min(progressPercent, 100);
+                this.timelineProgress.style.width = `${effectiveBarWidthPercent}%`;
+                if (this.timeStart) {
+                    this.timeStart.textContent = this.formatTime(0);
+                }
+                if (this.timeEnd) {
+                    this.timeEnd.textContent = this.formatTime(this.maxDuration);
+                }
+
+                // Calcul de la fenêtre de visualisation (overflow)
+                const windowWidth = Math.max(visibleDuration, 0.0001);
+
+                if (this.timeLifetime) {
+                    const lifetimeDisplay = Math.max(0, lifetimeDuration);
+                    if (lifetimeDisplay > this.maxDuration) {
+                        const totalText = this.formatDuration(lifetimeDisplay);
+                        const preservedText = this.formatDuration(this.maxDuration);
+                        this.timeLifetime.textContent = `Total enregistré : ${totalText} - seules les dernières ${preservedText} sont conservées`;
+                        this.timeLifetime.style.display = '';
+                    } else {
+                        this.timeLifetime.style.display = 'none';
+                    }
+                }
+
+                // timeCurrent (spéc utilisateur):
+                this.timeCurrent.style.display = '';
+                this.timeCurrent.textContent = this.formatTime(Math.max(0, Math.floor(currentTime)));
+
+                // Curseur rouge: position relative à la fenêtre visible et bornée par la largeur verte
+                if (this.state === 'playback' && this.playbackVideo) {
+                    const relativeProgress = currentTime / windowWidth;
+                    const clamped = Math.max(0, Math.min(1, relativeProgress));
+                    const leftWithinGreen = (clamped * effectiveBarWidthPercent);
+                    // console.debug('[timeline] cursor', { windowStart, windowWidth, relativeProgress, clamped, effectiveBarWidthPercent, leftWithinGreen });
+                    this.timelinePosition.style.left = `${leftWithinGreen}%`;
+                }
+            }
+
+            async handleTimelineClick(e) {
+            /**
+             * Gère les clics sur la timeline pour déclencher des flashbacks.
+             * Calcule le timestamp cible et lance la lecture avec gestion d'arrêt d'enregistrement.
+             */
+                if (this.state === 'transitioning') {
+                    // console.debug('[timeline] click ignored: transitioning');
+                    return;
+                }
+
+                const rect = this.timelineBar.getBoundingClientRect(); // Coordonnées du rectangle de la barre verte
+                const x = e.clientX - rect.left;
+                const clickPercentOfTimeline = x / rect.width;
+                // console.debug('[timeline] Click position', { x, rectWidth: rect.width, clickPercentOfTimeline });
+
+                const totalDuration = this.visibleWindowDuration || 0;
+
+                // Calcul factorisé du targetTime (même logique pour recording et playback)
+                const targetTime = this.calculateTargetTime(clickPercentOfTimeline, rect, totalDuration);
+
+                // Lancement unifié avec validation
+                await this.seekPlayback(targetTime, {
+                    allowFromRecording: true,
+                    allowFromStopped: true
+                });
+            }
+
+            // === FONCTIONS COMMUNES DE LECTURE ===
+
+            async playFromTimestamp(timestamp) {
+                // Étape 1: Gérer l'arrêt d'enregistrement si nécessaire
+                if (this.state === 'recording') {
+                    this.setState('transitioning');
+                    // console.log(`Stopping current recording for timestamp playback`);
+
+                    // Arrêt du recorder
+                    try {
+                        this.mediaRecorder.stop();
+                    } catch (e) {
+                        // console.warn('mediaRecorder.stop threw', e);
+                    }
+                    this.stopTimer();
+
+                    // Attendre la finalisation et sauvegarder
+                    await this.waitForRecorderStop();
+                    this.saveCurrentSession();
+
+                    // Préparer les sessions pour lecture
+                    this.allSessions = [...this.recordedSessions];
+                }
+
+                // Étape 2: Lancer la lecture
+                this.playSessionsFromTimestamp(timestamp);
+            }
+
+            playSessionsFromTimestamp(timestamp) {
+                if (!Number.isFinite(timestamp)) {
+                    timestamp = 0;
+                }
+                const sessions = this.allSessions || [];
+                if (sessions.length === 0) {
+                    return;
+                }
+
+                for (let i = 0; i < sessions.length; i++) {
+                    const session = sessions[i];
+                    const sessionStartAbs = session.visibleStartAbs ?? session.absoluteStart ?? 0;
+                    const sessionEndAbs = session.visibleEndAbs ?? sessionStartAbs;
+
+                    if (timestamp < sessionStartAbs) {
+                        this.currentPlaybackIndex = i;
+                        this.playCurrentSession(0);
+                        return;
+                    }
+
+                    if (timestamp < sessionEndAbs) {
+                        this.currentPlaybackIndex = i;
+                        const seekTime = Math.max(0, timestamp - sessionStartAbs);
+                        // console.debug('[play] From timestamp', { timestamp, chosenIndex: i, seekTime, sessionsCount: sessions.length });
+                        this.playCurrentSession(seekTime);
+                        return;
+                    }
+                }
+
+                const lastIndex = sessions.length - 1;
+                const lastSession = sessions[lastIndex];
+                const lastStartAbs = lastSession.visibleStartAbs ?? lastSession.absoluteStart ?? 0;
+                const lastEndAbs = lastSession.visibleEndAbs ?? lastStartAbs;
+                this.currentPlaybackIndex = lastIndex;
+                const clamped = Math.max(0, Math.min(timestamp, lastEndAbs) - lastStartAbs);
+                // console.debug('[play] Timestamp beyond last session, defaulting to last', { index: this.currentPlaybackIndex, seekTime: clamped });
+                this.playCurrentSession(clamped);
+            }
+
+            waitForRecorderStop() { // Attendre que le recorder s'arrête (ne fait rien d'autre qu'attendre que le recorder s'arrête)
+                return new Promise((resolve) => { 
+                    if (!this.mediaRecorder) { // Si le recorder n'existe pas, résoudre immédiatement
+                        resolve(); 
+                        return;
+                    }
+                    const state = this.mediaRecorder.state; // Vérifier l'état du recorder
+                    if (state !== 'recording') { // Si le recorder n'est pas en train d'enregistrer, résoudre immédiatement
+                        resolve();
+                        return;
+                    }
+                    const handler = () => {
+                        this.mediaRecorder.removeEventListener('stop', handler); // Retirer le listener une fois qu'il a été appelé
+                        resolve(); // Résoudre la promesse
+                    };
+                    this.mediaRecorder.addEventListener('stop', handler, { once: true }); // Ajouter le listener une fois pour éviter les doublons
+                });
+            }
+
+            playSessionsFromStart(sessions) {
+                this.allSessions = sessions;
+                this.currentPlaybackIndex = 0;
+                this.currentReferencePosition = 0;
+                this.playCurrentSession(0);
+            }
+
+            buildSessionBlob(session) {
+                if (!session || !Array.isArray(session.chunks) || session.chunks.length === 0) {
+                    this.debugLogState('buildBlob:empty-session', { sessionId: session?.id });
+                    return null;
+                }
+                const parts = [];
+                const firstChunk = session.chunks[0];
+                if (session.headerBlob && (!firstChunk || !firstChunk.isSessionHeader)) {
+                    parts.push(session.headerBlob);
+                }
+                session.chunks.forEach(chunk => {
+                    if (chunk && chunk.blob) {
+                        parts.push(chunk.blob);
+                    }
+                });
+                if (parts.length === 0) {
+                    this.debugLogState('buildBlob:no-parts', { sessionId: session?.id });
+                    return null;
+                }
+                const sizes = parts.map(part => part?.size || 0);
+                this.debugLogState('buildBlob:assembled', {
+                    sessionId: session.id,
+                    chunkCount: session.chunks.length,
+                    partCount: parts.length,
+                    partSizes: sizes,
+                    totalSize: sizes.reduce((a, b) => a + b, 0),
+                    hasHeader: !!session.headerBlob,
+                    preRollDuration: Number((session.preRollDuration || 0).toFixed(2)),
+                    visibleDuration: Number((session.duration || 0).toFixed(2))
+                });
+                const mimeType = session.mimeType || this.activeMimeType || 'video/webm';
+                return new Blob(parts, { type: mimeType });
+            }
+
+            playCurrentSession(seekTime = 0) {
+                if (this.currentPlaybackIndex >= this.allSessions.length) {
+                    this.resumeRecordingAfterPlayback();
+                    return;
+                }
+
+                // Capturer l'ID de lecture actuel pour utilisation dans les handlers d'erreur
+                const sessionPlaybackId = this._playbackId;
+
+                // NETTOYAGE IMMÉDIAT : Arrêter et nettoyer TOUS les handlers de l'ancienne lecture
+                // Cela doit être fait AVANT de changer la source vidéo pour éviter les race conditions
+                if (this.playbackVideo) {
+                    this.playbackVideo.pause();
+                    // Retirer tous les event listeners
+                    if (this._timeupdateHandler) {
+                        this.playbackVideo.removeEventListener('timeupdate', this._timeupdateHandler);
+                        this._timeupdateHandler = null;
+                    }
+                    if (this._onEndedHandler) {
+                        this.playbackVideo.removeEventListener('ended', this._onEndedHandler);
+                        this._onEndedHandler = null;
+                    }
+                    if (this._onErrorHandler) {
+                        this.playbackVideo.removeEventListener('error', this._onErrorHandler);
+                        this._onErrorHandler = null;
+                    }
+                    // Retirer tous les listeners restants en changeant la source
+                    this.videoPreview.srcObject = null;
+                }
+                // Annuler tous les timers
+                if (this._playbackTimeout) {
+                    clearTimeout(this._playbackTimeout);
+                    this._playbackTimeout = null;
+                }
+                if (this._playbackInterval) {
+                    clearInterval(this._playbackInterval);
+                    this._playbackInterval = null;
+                }
+                if (this._timeupdateGuardTimeout) {
+                    clearTimeout(this._timeupdateGuardTimeout);
+                    this._timeupdateGuardTimeout = null;
+                }
+                if (this._metadataTimeout) {
+                    clearTimeout(this._metadataTimeout);
+                    this._metadataTimeout = null;
+                }
+                this._finalizePlayback = null;
+                // Réinitialiser les flags
+                this._endedFired = false;
+
+                const session = this.allSessions[this.currentPlaybackIndex];
+                if (!session || !session.chunks || session.chunks.length === 0) {
+                    this.onSessionEnded(sessionPlaybackId);
+                    return;
+                }
+                this.debugLogState('play:start', {
+                    sessionId: session.id,
+                    playbackIndex: this.currentPlaybackIndex,
+                    chunkCount: session.chunks.length,
+                    hasHeaderBlob: !!session.headerBlob,
+                    chunkIds: session.chunks.map(chunk => chunk.id),
+                    chunkSizes: session.chunks.map(chunk => (chunk && chunk.blob) ? chunk.blob.size : 0),
+                    chunkDurations: session.chunks.map(chunk => Number((chunk?.duration || 0).toFixed(2))),
+                    seekTime,
+                    preRollDuration: Number((session.preRollDuration || 0).toFixed(2)),
+                    visibleDuration: Number((session.duration || 0).toFixed(2))
+                });
+                const visibleDuration = session.duration || session.playableDuration || 0;
+                const preRollDuration = session.preRollDuration || 0;
+                const sessionDuration = visibleDuration; // alias pour compatibilité historique
+                const sessionBlob = this.buildSessionBlob(session);
+                if (!sessionBlob) {
+                    this.debugLogState('play:blob-null', { sessionId: session.id, playbackIndex: this.currentPlaybackIndex });
+                    this.onSessionEnded(sessionPlaybackId);
+                    return;
+                }
+                this.debugLogState('play:blob-ready', {
+                    sessionId: session.id,
+                    playbackIndex: this.currentPlaybackIndex,
+                    blobSize: sessionBlob.size,
+                    mimeType: sessionBlob.type,
+                    preRollDuration: Number(preRollDuration.toFixed(2)),
+                    visibleDuration: Number(visibleDuration.toFixed(2))
+                });
+                // Toujours recréer une blob URL fraîche pour éviter d'utiliser une URL révoquée
+                if (session.blobUrl) {
+                    try { URL.revokeObjectURL(session.blobUrl); } catch (e) { /* noop */ }
+                }
+                session.blobUrl = URL.createObjectURL(sessionBlob);
+
+                // Toujours détacher le flux caméra avant d'attacher une source vidéo
+                this.videoPreview.srcObject = null;
+                this.playbackVideo = this.videoPreview; // Attacher le nouveau video element
+                this.playbackVideo.src = session.blobUrl; // Attacher la nouvelle blob URL
+                try { // Charger la nouvelle vidéo
+                    this.playbackVideo.load(); 
+                } catch (e) {
+                    // console.warn('video.load() failed', e);
+                }
+                this.playbackVideo.muted = false; // Active le son
+
+                // Timeout pour détecter si loadedmetadata ne se déclenche jamais
+                const metadataTimeout = setTimeout(() => {
+                    // Vérifier que cette lecture est toujours active (pas interrompue par un nouveau flashback)
+                    if (this._playbackId !== sessionPlaybackId) {
+                        // Cette lecture a été interrompue, ignorer cet appel
+                        return;
+                    }
+                    // console.error('[play] Timeout waiting for loadedmetadata', { index: this.currentPlaybackIndex, blobUrl: session.blobUrl });
+                    this.showMessage('Erreur de chargement de la vidéo', 'error');
+                    // Passer à la session suivante si on ne peut pas charger celle-ci
+                    this.onSessionEnded(sessionPlaybackId);
+                }, 5000);
+                this._metadataTimeout = metadataTimeout;
+
+                const onLoadedMetadata = () => {
+                    /**
+                     * Gestionnaire d'événement loadedmetadata - se déclenche quand les métadonnées vidéo sont chargées
+                     *
+                     * Rôles essentiels :
+                     * 1. Validation durée réelle vs durée estimée lors de l'enregistrement
+                     * 2. Ajustement du seekTime pour éviter de dépasser la fin de la vidéo
+                     * 3. Positionnement du curseur vidéo au bon timestamp
+                     * 4. Transition d'état vers 'playback' (synchronisation critique)
+                     * 5. Initialisation des timers et gestionnaires d'événements
+                     *
+                     * Important : Les métadonnées (durée, dimensions, codecs) ne sont pas disponibles
+                     * immédiatement après video.src = blobUrl. Il faut attendre cet événement.
+                     */
+                    
+                    // 0. Nettoyage initial : annuler timeout et retirer l'event listener
+                    clearTimeout(metadataTimeout);
+                    this.playbackVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
+                    if (this._metadataTimeout === metadataTimeout) {
+                        this._metadataTimeout = null;
+                    }
+
+                    // CAPTURER l'ID de lecture actuel pour vérification dans tous les handlers
+                    // Si _playbackId change (nouveau flashback), tous les handlers de cette lecture seront invalidés
+                    const currentPlaybackId = this._playbackId;
+                    const finalizePlayback = (reason) => {
+                        if (this._playbackId !== currentPlaybackId) {
+                            return;
+                        }
+                        if (this._endedFired) {
+                            return;
+                        }
+                        this._endedFired = true;
+                        this._finalizePlayback = null;
+                        if (this._playbackTimeout) {
+                            clearTimeout(this._playbackTimeout);
+                            this._playbackTimeout = null;
+                        }
+                        if (this._playbackInterval) {
+                            clearInterval(this._playbackInterval);
+                            this._playbackInterval = null;
+                        }
+                        if (this._timeupdateGuardTimeout) {
+                            clearTimeout(this._timeupdateGuardTimeout);
+                            this._timeupdateGuardTimeout = null;
+                        }
+                        if (this._metadataTimeout) {
+                            clearTimeout(this._metadataTimeout);
+                            this._metadataTimeout = null;
+                        }
+                        if (this.playbackVideo && this._timeupdateHandler) {
+                            this.playbackVideo.removeEventListener('timeupdate', this._timeupdateHandler);
+                            this._timeupdateHandler = null;
+                        }
+                        if (this.playbackVideo && this._onEndedHandler) {
+                            this.playbackVideo.removeEventListener('ended', this._onEndedHandler);
+                            this._onEndedHandler = null;
+                        }
+                        if (this.playbackVideo && this._onErrorHandler) {
+                            this.playbackVideo.removeEventListener('error', this._onErrorHandler);
+                            this._onErrorHandler = null;
+                        }
+                        if (session && session.blobUrl) {
+                            try { URL.revokeObjectURL(session.blobUrl); } catch (e) { /* noop */ }
+                            session.blobUrl = null;
+                        }
+                        this.onSessionEnded(currentPlaybackId);
+                    };
+                    this._finalizePlayback = finalizePlayback;
+
+                    // 1. Validation durée réelle vs durée estimée lors de l'enregistrement
+                    const expectedMediaDuration = preRollDuration + visibleDuration;
+                    const actualVideoDuration = this.playbackVideo.duration || expectedMediaDuration;
+                    const durationDiff = actualVideoDuration - expectedMediaDuration; // Différence entre la durée réelle et la durée attendue (preRoll + visible)
+                    // console.debug('[play] Loaded metadata', {
+                    //     index: this.currentPlaybackIndex,
+                    //     seekTime,
+                    //     sessionEstimatedDuration: session.estimatedDuration,
+                    //     actualVideoDuration,
+                    //     durationDiff,
+                    //     totalSessions: this.allSessions.length
+                    // });
+                    
+                    // 2. Ajustement du seekTime pour éviter de dépasser la fin de la vidéo
+                    const clampedVisibleSeek = Math.min(Math.max(seekTime, 0), Math.max(0, visibleDuration));
+                    const mediaSeekTime = Math.min(
+                        Math.max(clampedVisibleSeek + preRollDuration, 0),
+                        Math.max(actualVideoDuration - 0.05, 0)
+                    );
+                    if (mediaSeekTime !== seekTime) {
+                        // console.debug('[play] Adjusted seekTime to account for preRoll', { originalVisibleSeek: seekTime, clampedVisibleSeek, mediaSeekTime, preRollDuration, actualDuration: actualVideoDuration });
+                    }
+
+                    // 3. Positionnement du curseur vidéo au bon timestamp
+                    try {
+                        this.playbackVideo.currentTime = mediaSeekTime;
+                    } catch (e) {
+                        // console.warn('setting currentTime failed, using 0', e);
+                        this.playbackVideo.currentTime = 0;
+                    }
+
+                    // 4. Transition d'état vers 'playback' (synchronisation critique)
+                    this.setState('playback');
+                    this.updateUIForPlayback();
+                    this.updateDebugPanel(); // Mettre à jour le panneau pour mettre en évidence le segment en lecture
+                    this.startTimer(); // Démarrer le timer pour la lecture
+
+                    // 5. Initialisation des timers et gestionnaires d'événements
+                    // Nettoyer les anciens gestionnaires
+                    if (this._timeupdateHandler) {
+                        this.playbackVideo.removeEventListener('timeupdate', this._timeupdateHandler);
+                    }
+                    if (this._playbackTimeout) {
+                        clearTimeout(this._playbackTimeout);
+                    }
+                    if (this._playbackInterval) {
+                        clearInterval(this._playbackInterval);
+                    }
+                    
+                    // Handler pour ended - stocker le flag et la fonction sur this pour le garde-fou
+                    this._endedFired = false;
+                    this._lastCheckTime = Date.now();
+                    this._lastVideoTime = mediaSeekTime;
+                    // Variable séparée pour l'intervalle (ne sera pas écrasée par timeupdate)
+                    let intervalLastVideoTime = mediaSeekTime;
+                    let intervalLastCheckTime = Date.now();
+                    
+                    const onEnded = () => finalizePlayback('ended');
+                    this._onEndedHandler = onEnded; // Stocker pour le garde-fou
+                    this.playbackVideo.addEventListener('ended', onEnded, { once: true });
+                    
+                    // Timeout absolu basé sur la durée estimée : force la fin après estimatedDuration - seekTime + marge
+                    const remainingDuration = Math.max(0, visibleDuration - clampedVisibleSeek);
+                    const timeoutMs = (remainingDuration + 1) * 1000; // +1s de marge
+                    // console.debug('[play] Setting absolute timeout', { remainingDuration, timeoutMs, estimatedDuration: session.estimatedDuration, seekTime });
+                    this._playbackTimeout = setTimeout(() => {
+                        // Vérifier que cette lecture est toujours active (pas interrompue par un nouveau flashback)
+                        if (this._playbackId !== currentPlaybackId) {
+                            // Cette lecture a été interrompue, ignorer cet appel
+                            return;
+                        }
+                        if (!this._endedFired) {
+                            // console.debug('[play] Absolute timeout reached - forcing session end', {
+                            //     currentTime: this.playbackVideo.currentTime,
+                            //     duration: this.playbackVideo.duration,
+                            //     estimatedDuration: sessionDuration
+                            // });
+                            finalizePlayback('timeout');
+                        }
+                    }, timeoutMs);
+                    
+                    // Intervalle de vérification pour détecter si la vidéo est bloquée ou terminée
+                    this._playbackInterval = setInterval(() => {
+                        // Vérifier que cette lecture est toujours active (pas interrompue par un nouveau flashback)
+                        if (this._playbackId !== currentPlaybackId) {
+                            // Cette lecture a été interrompue, nettoyer et sortir
+                            clearInterval(this._playbackInterval);
+                            this._playbackInterval = null;
+                            return;
+                        }
+                        if (this._endedFired) {
+                            clearInterval(this._playbackInterval);
+                            this._playbackInterval = null;
+                    return;
+                }
+                        const now = Date.now();
+                        const currentVideoTime = this.playbackVideo.currentTime || 0;
+                        const targetEndTime = Math.min(actualVideoDuration, preRollDuration + visibleDuration);
+                        const videoDuration = this.playbackVideo.duration || targetEndTime;
+                        const timeSinceLastIntervalCheck = (now - intervalLastCheckTime) / 1000;
+                        const videoTimeDiff = Math.abs(currentVideoTime - intervalLastVideoTime);
+                        
+                        // Log périodique pour debugging
+                        if (Math.random() < 0.1) { // Log ~10% du temps pour ne pas spammer
+                            // console.debug('[play] Interval check', {
+                            //     currentTime: currentVideoTime,
+                            //     videoDuration,
+                            //     estimatedDuration: sessionDuration,
+                            //     intervalLastVideoTime,
+                            //     videoTimeDiff,
+                            //     timeSinceLastIntervalCheck,
+                            //     endedFired: this._endedFired
+                            // });
+                        }
+                        
+                        // Si la vidéo ne progresse pas depuis plus de 1.5s (détecté par l'intervalle), forcer la fin
+                        if (timeSinceLastIntervalCheck > 1.5 && videoTimeDiff < 0.1) {
+                            // console.debug('[play] Video appears stuck - forcing session end', {
+                            //     currentTime: currentVideoTime,
+                            //     intervalLastVideoTime,
+                            //     videoTimeDiff,
+                            //     timeSinceLastIntervalCheck,
+                            //     videoDuration,
+                            //     estimatedDuration: sessionDuration
+                            // });
+                            clearInterval(this._playbackInterval);
+                            this._playbackInterval = null;
+                            finalizePlayback('interval-stuck');
+                            return;
+                        }
+                        
+                        // Si on a atteint ou dépassé la durée réelle de la vidéo, forcer la fin
+                        if (videoDuration && currentVideoTime >= videoDuration - 0.2) {
+                            // console.debug('[play] Reached video duration - forcing session end', {
+                            //     currentTime: currentVideoTime,
+                            //     videoDuration,
+                            //     estimatedDuration: sessionDuration
+                            // });
+                            clearInterval(this._playbackInterval);
+                            this._playbackInterval = null;
+                            finalizePlayback('interval-duration');
+                    return;
+                }
+
+                        // Si on a atteint ou dépassé la durée estimée, forcer la fin (garde-fou)
+                        if (currentVideoTime >= targetEndTime - 0.1) {
+                            // console.debug('[play] Reached estimated duration - forcing session end', {
+                            //     currentTime: currentVideoTime,
+                            //     videoDuration,
+                            //     estimatedDuration: sessionDuration
+                            // });
+                            clearInterval(this._playbackInterval);
+                            this._playbackInterval = null;
+                            finalizePlayback('interval-estimate');
+                            return;
+                        }
+                        
+                        // Mettre à jour les valeurs pour le prochain check (seulement si la vidéo progresse)
+                        if (videoTimeDiff >= 0.1) {
+                            intervalLastCheckTime = now;
+                            intervalLastVideoTime = currentVideoTime;
+                        }
+                    }, 500); // Vérifier toutes les 500ms
+                    
+                    // Handler timeupdate avec vérification de fin de vidéo
+                    this._timeupdateHandler = () => {
+                        // Vérifier que cette lecture est toujours active (pas interrompue par un nouveau flashback)
+                        if (this._playbackId !== currentPlaybackId) {
+                            // Cette lecture a été interrompue, retirer ce handler et sortir
+                            if (this.playbackVideo && this._timeupdateHandler) {
+                                this.playbackVideo.removeEventListener('timeupdate', this._timeupdateHandler);
+                            }
+                            this._timeupdateHandler = null;
+                            return;
+                        }
+                        this.updateTimeline();
+                        const currentTime = this.playbackVideo.currentTime || 0;
+                        this._lastVideoTime = currentTime;
+                        this._lastCheckTime = Date.now();
+                        
+                        // Garde-fou : si on est très proche de la fin et que ended n'a pas été déclenché
+                        if (!this._endedFired) {
+                            const targetEndTime = Math.min(actualVideoDuration, preRollDuration + visibleDuration);
+                            const videoDuration = this.playbackVideo.duration || targetEndTime;
+                            if (currentTime >= videoDuration - 0.2 || currentTime >= targetEndTime - 0.2) {
+                                // console.debug(`[${new Date().toISOString()}] [play] Near end detected in timeupdate`, {
+                                //     currentTime,
+                                //     videoDuration,
+                                //     estimatedDuration: session.estimatedDuration,
+                                //     endedFired: this._endedFired
+                                // });
+                                // Forcer immédiatement plutôt que d'attendre
+                                if (this._timeupdateGuardTimeout) {
+                                    clearTimeout(this._timeupdateGuardTimeout);
+                                }
+                                this._timeupdateGuardTimeout = setTimeout(() => {
+                                    // Vérifier à nouveau que cette lecture est toujours active
+                                    if (this._playbackId !== currentPlaybackId) {
+                                        return;
+                                    }
+                                    this._timeupdateGuardTimeout = null;
+                                    if (!this._endedFired) {
+                                        // console.debug(`[${new Date().toISOString()}] [play] Forcing onEnded call from timeupdate guard`);
+                                        finalizePlayback('timeupdate-guard');
+                                    }
+                                }, 100);
+                            }
+                        }
+                    };
+                    this.playbackVideo.addEventListener('timeupdate', this._timeupdateHandler);
+
+                    this.playbackVideo.play().catch(err => {
+                        // Vérifier que cette lecture est toujours active
+                        if (this._playbackId !== currentPlaybackId) {
+                            return;
+                        }
+                        // console.error('Playback error on seek start:', err);
+                        // Retente à 0
+                        try {
+                            this.playbackVideo.currentTime = 0;
+                            this.playbackVideo.play().catch(err2 => {
+                                // Vérifier à nouveau que cette lecture est toujours active
+                                if (this._playbackId !== currentPlaybackId) {
+                                    return;
+                                }
+                                // console.error('Playback retry failed:', err2);
+                                this.showMessage('Playback failed', 'error');
+                                // Si même le retry échoue, passer à la session suivante
+                                finalizePlayback('playback-error-retry');
+                            });
+                        } catch (e2) {
+                                // console.error('Playback hard-fail:', e2);
+                            // Vérifier que cette lecture est toujours active
+                            if (this._playbackId !== currentPlaybackId) {
+                                return;
+                            }
+                            this.showMessage('Playback failed', 'error');
+                            finalizePlayback('playback-error');
+                        }
+                    });
+                };
+
+                // Gérer aussi l'erreur de chargement
+                const onError = (e) => {
+                    // Vérifier que cette lecture est toujours active
+                    if (this._playbackId !== sessionPlaybackId) {
+                        return;
+                    }
+                    this.debugLogState('play:error', {
+                        sessionId: session.id,
+                        playbackIndex: this.currentPlaybackIndex,
+                        error: e?.message || e?.type || 'unknown',
+                        readyState: this.playbackVideo?.readyState,
+                        networkState: this.playbackVideo?.networkState
+                    });
+                    if (this._finalizePlayback) {
+                        this._finalizePlayback('load-error');
+                        return;
+                    }
+                    clearTimeout(metadataTimeout);
+                    if (this._metadataTimeout === metadataTimeout) {
+                        this._metadataTimeout = null;
+                    }
+                    if (this.playbackVideo && this._onErrorHandler) {
+                        this.playbackVideo.removeEventListener('error', this._onErrorHandler);
+                        this._onErrorHandler = null;
+                    }
+                    this._finalizePlayback = null;
+                    // console.error('[play] Video load error', { index: this.currentPlaybackIndex, error: e, blobUrl: session.blobUrl });
+                    this.showMessage('Erreur de chargement de la vidéo', 'error');
+                    // Passer à la session suivante
+                    this.onSessionEnded(sessionPlaybackId);
+                };
+
+                this.playbackVideo.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+                this.playbackVideo.addEventListener('error', onError, { once: true });
+                this._onErrorHandler = onError;
+            }
+
+            // === FONCTIONS INTERRUPTION/FIN LECTURE + REPRISE ENREGISTREMENT ===
+
+            onSessionEnded(playbackId = null) { 
+                // Vérifier que cette lecture est toujours active (si playbackId est fourni)
+                // Si playbackId est fourni et ne correspond pas à _playbackId actuel, cette lecture a été interrompue
+                if (playbackId !== null && this._playbackId !== playbackId) {
+                    // Cette lecture a été interrompue par un nouveau flashback, ignorer cet appel
+                    return;
+                }
+                // Si on n'est plus en playback, ignorer aussi (sécurité supplémentaire)
+                if (this.state !== 'playback') {
+                    return;
+                }
+                // console.debug('[play] Session ended', { endedIndex: this.currentPlaybackIndex, totalSessions: this.allSessions.length, allSessions: this.allSessions.map(s => ({ duration: s.estimatedDuration })) });
+                this.currentPlaybackIndex++;
+                // console.debug('[play] After increment', { currentPlaybackIndex: this.currentPlaybackIndex, totalSessions: this.allSessions.length, willResume: this.currentPlaybackIndex >= this.allSessions.length });
+                if (this.currentPlaybackIndex >= this.allSessions.length) {
+                    // console.debug('[play] Last session reached, resuming recording');
+                    // console.debug('[play] About to call resumeRecordingAfterPlayback', { methodExists: typeof this.resumeRecordingAfterPlayback === 'function' });
+                    try {
+                        this.resumeRecordingAfterPlayback();
+                    } catch (e) {
+                        // console.error('[play] Error in resumeRecordingAfterPlayback', e);
+                    }
+                } else {
+                    // console.debug('[play] Advancing to next session', { nextIndex: this.currentPlaybackIndex, nextSessionDuration: this.allSessions[this.currentPlaybackIndex]?.estimatedDuration });
+                    this.playCurrentSession(0);
+                }
+            }
+
+            stopPlaybackAndResumeRecording() {
+                if (this.state === 'playback') {
+                    this.setState('stopped');
+                    this.currentPlaybackIndex = 0;
+                    this.currentReferencePosition = null;
+                    this._finalizePlayback = null;
+                    this.updateDebugPanel(); // Mettre à jour le panneau pour retirer la mise en évidence du segment
+                    // Nettoyer complètement l'élément vidéo (playbackVideo et videoPreview sont la même référence)
+                    if (this.playbackVideo) {
+                        this.playbackVideo.pause();
+                        this.playbackVideo.removeEventListener('ended', this.onSessionEnded);
+                        if (this._timeupdateHandler) {
+                            this.playbackVideo.removeEventListener('timeupdate', this._timeupdateHandler);
+                            this._timeupdateHandler = null;
+                        }
+                        this.playbackVideo.src = '';
+                        this.playbackVideo.srcObject = null;
+                        try {
+                            this.playbackVideo.load(); // Force le nettoyage complet
+                        } catch (e) {
+                            // console.warn('video.load() in cleanup failed', e);
+                        }
+                    }
+                    // Nettoyer videoPreview MAIS conserver le stream (sera réattaché dans startRecording)
+                    if (this.videoPreview) {
+                        this.videoPreview.src = '';
+                        // NE PAS mettre srcObject à null - conserver le stream pour la reprise
+                    }
+                    this.playbackVideo = null; // Réinitialiser la référence
+                    this.allSessions.forEach(s => {
+                        if (s.blobUrl) {
+                            try { URL.revokeObjectURL(s.blobUrl); } catch (e) { /* noop */ }
+                            s.blobUrl = null;
+                        }
+                    });
+                    // Revoquer les URLs différées
+                    if (this._pendingRevokes && this._pendingRevokes.length > 0) {
+                        this._pendingRevokes.forEach(url => {
+                            try { URL.revokeObjectURL(url); } catch (e) { /* noop */ }
+                        });
+                        this._pendingRevokes = [];
+                    }
+                    this.allSessions = [];
+                    this.stopTimer();
+                    // console.debug('[stopPlayback] Before resumeRecording', { recordedSessionsCount: this.recordedSessions.length, totalRecordedTime: this.totalRecordedTime, hasStream: !!this.stream });
+                    this.resumeRecording();
+                }
+            }
+
+            resumeRecordingAfterPlayback() {
+                // console.debug('[play] resumeRecordingAfterPlayback called', { recordedSessionsCount: this.recordedSessions.length, totalRecordedTime: this.totalRecordedTime });
+                this.stopPlaybackAndResumeRecording();
+            }
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', () => {
+            new FlashbackRecorder();
+        });
+    </script>
+</body>
+</html>
