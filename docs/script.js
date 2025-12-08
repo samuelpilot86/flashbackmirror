@@ -465,7 +465,7 @@ class FlashbackRecorder {
         this.markerUpFastPressThreshold = 500; // 0.5 seconds in milliseconds
         this.recordingStartTime = 0;
         this.totalRecordedTime = 0;
-        this.maxDuration = 10; // seconds
+        this.maxDuration = 600; // seconds
         this.bufferMarginSeconds = 10; // extra margin to ensure an earlier keyframe
         this.lifetimeRecordedDuration = 0; // total duration recorded since launch (monotonic)
         this.sessionBoundaries = [];
