@@ -20,114 +20,18 @@ This backlog contains future enhancements and features planned for the Flashback
   
   The table of contents will automatically link to the sections when viewed in a Markdown viewer.
 -->
-<!-- Also, a sorting has been added by category inducing some prioritization. Insert new items under the "To be sorted" category -->
-
-
-### Avant diffusion
-
-- [BUG-020: Entrée et Sortie Audio Doivent Toujours Utiliser les Périphériques par Défaut du Device](#bug-020-entree-et-sortie-audio-doivent-toujours-utiliser-les-peripheriques-par-defaut-du-device)
-
-
-### Diffusion
-
-- [BUG-017: Application Works Only on One Computer, Fails on Other Devices](#bug-017-application-works-only-on-one-computer-fails-on-other-devices)
-- [DEPLOY-001: Deploy Application to Web Hosting](#deploy-001-deploy-application-to-web-hosting)
-
-
-### Après diffusion
 
 - [US-009: Stop Flashback & Resume Recording](#us-009-stop-flashback--resume-recording)
 - [BUG-015: Spacebar Adds Space in Max Duration Input Instead of Marker](#bug-015-spacebar-adds-space-in-max-duration-input-instead-of-marker)
-- [BUG-018: Progression par Puissance de 2 Incorrecte lors d'Appuis Rapides sur Back](#bug-018-progression-par-puissance-de-2-incorrecte-lors-dappuis-rapides-sur-back)
 - [BUG-019: Images Trop Rapprochées dans la Photo Timeline](#bug-019-images-trop-rapprochees-dans-la-photo-timeline)
-- [UX-001: Display Time Offset Overlay on Video](#ux-001-display-time-offset-overlay-on-video)
-- [TECH-002: Monitor and Adapt to Default Audio Device Changes](#tech-002-monitor-and-adapt-to-default-audio-device-changes)
+- [BUG-020: Mini-Enceinte S'Éteint Après une Certaine Durée](#bug-020-mini-enceinte-setient-apres-une-certaine-duree)
+- [FEAT-001: Menu d'Options avec Mode Miroir](#feat-001-menu-doptions-avec-mode-miroir)
 - [TEST-001: Tests de Comportement avec Changements d'Équipement et États Système](#test-001-tests-de-comportement-avec-changements-dequipement-et-etats-systeme)
+- [TEST-002: Vérifier la Lecture de Flashback Après un Enregistrement de Plus de 30 Minutes (peut être fait pendant une séance de sport)](#test-002-vérifier-la-lecture-de-flashback-après-un-enregistrement-de-plus-de-30-minutes-peut-être-fait-pendant-une-séance-de-sport)
+- [TEST-003: Vérifier que la Mini-Enceinte ne S'Éteint Pas Après 30 Minutes d'Enregistrement (peut être fait pendant une séance de sport)](#test-003-vérifier-que-la-mini-enceinte-ne-setient-pas-après-30-minutes-denregistrement-peut-être-fait-pendant-une-séance-de-sport)
 
 
 ## Backlog Items
-
-### BUG-020: Entrée et Sortie Audio Doivent Toujours Utiliser les Périphériques par Défaut du Device {#bug-020-entree-et-sortie-audio-doivent-toujours-utiliser-les-peripheriques-par-defaut-du-device}
-
-**Description**:  
-L'application doit toujours utiliser les périphériques d'entrée et de sortie audio par défaut du système, y compris lors des changements de périphériques (par exemple, branchement d'une enceinte Bluetooth, changement de casque, etc.). Actuellement, l'application peut ne pas suivre automatiquement les changements de périphériques par défaut, ce qui peut causer des problèmes d'audio (pas de son, mauvais périphérique utilisé).
-
-**Comportement Actuel**:
-- L'application peut utiliser un périphérique audio spécifique au démarrage
-- Lors d'un changement de périphérique par défaut (ex: branchement d'une enceinte Bluetooth), l'application peut continuer à utiliser l'ancien périphérique
-- L'audio peut ne pas être routé vers le nouveau périphérique par défaut
-- L'enregistrement peut continuer avec l'ancien microphone même si un nouveau périphérique par défaut est sélectionné
-
-**Comportement Attendu**:
-- L'application utilise toujours les périphériques audio par défaut du système
-- Lors d'un changement de périphérique par défaut, l'application détecte le changement et s'adapte automatiquement
-- L'audio de lecture (flashback) est automatiquement routé vers le nouveau périphérique de sortie par défaut
-- L'enregistrement utilise automatiquement le nouveau périphérique d'entrée par défaut (si possible sans interruption)
-- Les changements de périphériques sont transparents pour l'utilisateur (pas besoin de redémarrer l'application)
-
-**Scénarios à Gérer**:
-1. **Branchement d'une enceinte Bluetooth** pendant l'enregistrement ou la lecture
-2. **Branchement d'un casque** pendant l'enregistrement ou la lecture
-3. **Débranchement d'un périphérique** (retour au périphérique par défaut précédent)
-4. **Changement du périphérique par défaut dans les paramètres système** pendant l'utilisation
-5. **Démarrage de l'application** avec un périphérique par défaut déjà configuré
-
-**Acceptance Criteria**:
-- [ ] L'application détecte automatiquement les changements de périphériques audio par défaut
-- [ ] L'audio de lecture (flashback) est automatiquement routé vers le nouveau périphérique de sortie par défaut
-- [ ] L'enregistrement utilise automatiquement le nouveau périphérique d'entrée par défaut (si possible sans interruption)
-- [ ] Les changements sont transparents pour l'utilisateur (pas de message d'erreur, pas besoin de redémarrer)
-- [ ] L'application fonctionne correctement au démarrage avec les périphériques par défaut actuels
-- [ ] Pas de perte de données ou d'interruption de l'enregistrement lors des changements de périphériques d'entrée
-- [ ] Pas d'interruption de la lecture lors des changements de périphériques de sortie
-
-**Technical Considerations**:
-- **Détection des changements**:
-  - Utiliser `navigator.mediaDevices.addEventListener('devicechange', ...)` pour détecter les ajouts/suppressions de périphériques
-  - Polling périodique (toutes les 0,5 secondes) comme fallback pour les navigateurs sans support de `devicechange`
-  - Utiliser `navigator.mediaDevices.enumerateDevices()` pour obtenir la liste des périphériques disponibles
-  
-- **Audio de sortie (lecture)**:
-  - Pour les éléments HTML5 `<video>`/`<audio>`, le routage est généralement géré automatiquement par le navigateur
-  - Utiliser `setSinkId()` si disponible pour forcer le routage vers le périphérique par défaut
-  - Vérifier périodiquement le périphérique par défaut et mettre à jour si nécessaire
-  
-- **Audio d'entrée (enregistrement)**:
-  - Lors d'un changement de périphérique d'entrée par défaut, deux options :
-    - Option A: Détecter le changement et notifier l'utilisateur, permettant de continuer avec l'ancien périphérique ou de basculer
-    - Option B: Automatiquement réinitialiser `getUserMedia()` avec le nouveau périphérique par défaut (peut interrompre l'enregistrement)
-    - Option C: Continuer avec le stream actuel mais détecter le changement pour le prochain enregistrement
-    On choisit ici l'option A si disponible, sinon poser la question avant d'implémenter
-  
-- **Gestion du stream actuel**:
-  - Stocker l'ID du périphérique actuellement utilisé
-  - Comparer périodiquement avec le périphérique par défaut du système
-  - Décider si une transition est nécessaire et comment la gérer
-  
-- **Compatibilité navigateur**:
-  - `devicechange` est bien supporté dans les navigateurs modernes
-  - `setSinkId()` a un support limité (Chrome/Edge, pas Safari/Firefox)
-  - Implémenter des fallbacks pour les navigateurs sans support complet
-
-**Dependencies**:
-- `navigator.mediaDevices` API (déjà utilisé pour `getUserMedia`)
-- Support navigateur pour `devicechange` et `setSinkId()` (avec fallbacks)
-- Gestion des streams audio/vidéo existants
-
-**Recommended Approach**:
-1. Implémenter un listener `devicechange` pour détecter les changements de périphériques
-2. Ajouter un polling périodique (toutes les 0,5 secondes) comme fallback
-3. Pour la sortie audio: Utiliser `setSinkId()` si disponible, sinon s'appuyer sur le routage automatique du navigateur
-4. Pour l'entrée audio: Détecter les changements et notifier l'utilisateur ou basculer automatiquement selon la stratégie choisie
-5. Tester avec des scénarios courants: branchement/débranchement d'enceintes Bluetooth, changement de casque, modification des paramètres système
-
-**Priorité**: Avant diffusion (bloquant pour une utilisation en production)
-
-**Liens**:
-- Lié à TECH-002 (amélioration future pour une gestion plus avancée)
-- Lié à TEST-001 (scénarios de test similaires)
-
----
 
 ### US-009: Stop Flashback & Resume Recording {#us-009-stop-flashback--resume-recording}
 (non-urgent because navigating using the Down button does the same)
@@ -177,45 +81,6 @@ When the user edits the *Max Duration* numeric field via keyboard and then press
 
 ---
 
-### BUG-018: Progression par Puissance de 2 Incorrecte lors d'Appuis Rapides sur Back {#bug-018-progression-par-puissance-de-2-incorrecte-lors-dappuis-rapides-sur-back}
-
-**Description**:  
-Lors d'appuis rapides successifs sur le bouton Back (←), la progression n'est pas réellement par puissance de 2. Actuellement, le 2ème appui recule de 3 secondes au total (2 + 1) au lieu de 2 secondes. Le comportement attendu est une progression cumulative correcte : 1s au 1er appui, 1s au 2ème (total 2s), 2s au 3ème (total 4s), 4s au 4ème (total 8s), etc.
-
-**Comportement Actuel (Incorrect)**:
-- 1er appui : recule de 1s (total : 1s) ✓
-- 2ème appui : recule de 2s depuis position actuelle (total : 1 + 2 = 3s) ✗
-- 3ème appui : recule de 4s depuis position actuelle (total : 3 + 4 = 7s) ✗
-
-**Comportement Attendu (Correct)**:
-- 1er appui : recule de 1s (total : 1s) ✓
-- 2ème appui : recule de 1s de plus (total : 2s) ✓
-- 3ème appui : recule de 2s de plus (total : 4s) ✓
-- 4ème appui : recule de 4s de plus (total : 8s) ✓
-
-**Acceptance Criteria**:
-- [ ] Le 1er appui sur Back recule d'exactement 1 seconde
-- [ ] À partir du 2ème appui, chaque appui recule de `2^(nombre_d_appuis - 2)` secondes depuis la position actuelle
-- [ ] La progression cumulative suit correctement les puissances de 2 : 1s, 2s, 4s, 8s, 16s...
-- [ ] Le même comportement s'applique aux appuis rapides successifs (sans réinitialisation du compteur)
-
-**Formule de Calcul**:
-- 1er appui (n=1) : delta = 1 seconde
-- n-ième appui (n≥2) : delta = 2^(n-2) secondes
-
-**Exemple**:
-- Appui 1 : delta = 1s → position = initiale - 1s
-- Appui 2 : delta = 2^(2-2) = 2^0 = 1s → position = (initiale - 1s) - 1s = initiale - 2s
-- Appui 3 : delta = 2^(3-2) = 2^1 = 2s → position = (initiale - 2s) - 2s = initiale - 4s
-- Appui 4 : delta = 2^(4-2) = 2^2 = 4s → position = (initiale - 4s) - 4s = initiale - 8s
-
-**Technical Considerations**:
-- Modifier `calculateSeekDuration()` pour calculer le delta incrémental au lieu de la durée totale
-- Ou modifier `handleBack()` pour calculer la position cible cumulative correcte
-- S'assurer que le compteur `backPressCount` est correctement géré et réinitialisé après le timeout
-
----
-
 ### BUG-019: Images Trop Rapprochées dans la Photo Timeline {#bug-019-images-trop-rapprochees-dans-la-photo-timeline}
 
 **Description**:  
@@ -251,186 +116,239 @@ Les images (miniatures) dans la photo timeline sont trop rapprochées les unes d
 
 ---
 
-### BUG-017: Application Works Only on One Computer, Fails on Other Devices {#bug-017-application-works-only-on-one-computer-fails-on-other-devices}
+### BUG-020: Mini-Enceinte S'Éteint Après une Certaine Durée {#bug-020-mini-enceinte-setient-apres-une-certaine-duree}
 
 **Description**:  
-The application currently works reliably only on the user’s main computer, but fails to function correctly on other devices such as the user’s laptop and Juliette’s laptop/tablet. The exact failure modes may include inability to access camera/microphone, blank video, recording not starting, or flashback features not working.
+La mini-enceinte (ou casque Bluetooth/USB) se met en veille automatiquement après une période d'inactivité audio, ce qui interrompt la lecture des flashbacks ou peut causer des problèmes lors de la reprise de l'enregistrement. Ce comportement est dû aux mécanismes d'économie d'énergie des périphériques audio.
+
+**Comportement Actuel**:
+- L'enceinte s'éteint automatiquement après 5-10 minutes sans signal audio
+- Lors de la reprise de lecture d'un flashback, l'audio peut être coupé ou retardé
+- L'utilisateur doit parfois réactiver manuellement l'enceinte
+- Problème particulièrement visible lors de longues sessions d'enregistrement avec peu de flashbacks
+
+**Comportement Attendu**:
+- L'enceinte reste active pendant toute la durée d'utilisation de l'application
+- La lecture des flashbacks démarre immédiatement sans délai ou coupure
+- Aucune intervention manuelle requise pour maintenir l'enceinte active
 
 **Acceptance Criteria**:
-- [ ] Reproduce and document the behavior on at least two other devices (e.g. laptop + tablet), noting browser, OS, and error messages (console + UI).
-- [ ] Identify whether the root cause is browser support, HTTPS / permissions issues, hardware constraints, or app-level bugs.
-- [ ] Implement fixes or clear fallbacks so that the app either works or shows an explicit, understandable error message on these devices.
-- [ ] Update documentation with a short compatibility note (supported browsers / known limitations).
+- [ ] L'enceinte reste active pendant toute la session d'enregistrement
+- [ ] La lecture des flashbacks démarre immédiatement sans délai d'activation de l'enceinte
+- [ ] Aucun son audible n'est généré pour maintenir l'enceinte active (solution transparente)
+- [ ] La solution fonctionne avec différents types de périphériques (Bluetooth, USB, casques)
+- [ ] Pas d'impact négatif sur la performance ou la consommation de batterie
+
+**Proposition de Solution**:
+
+**Approche 1 : Signal Audio Silencieux Périodique (Recommandé)**
+- Générer un signal audio inaudible (fréquence très basse ou très haute, amplitude minimale) à intervalles réguliers (ex: toutes les 30-60 secondes)
+- Utiliser l'API Web Audio pour créer un `OscillatorNode` avec une fréquence inaudible (ex: 20 Hz ou 20 kHz) et un gain très faible
+- Activer ce signal uniquement pendant l'enregistrement ou les périodes d'inactivité audio
+- Désactiver automatiquement pendant la lecture des flashbacks pour éviter toute interférence
+
+**Approche 2 : Keep-Alive Audio Context (Maintien Actif de l'AudioContext)**
+- Cette approche consiste à empêcher la suspension automatique de l'AudioContext par le navigateur, ce qui maintient une activité audio minimale et empêche l'enceinte de passer en veille. Contrairement à l'approche 1 qui génère un signal périodique, celle-ci se concentre sur la reprise proactive du contexte audio pour qu'il reste en état "running", même sans production de son. Cela évite les extinctions dues à l'inactivité perçue par l'enceinte, sans générer de signal audio (inaudible ou non).
+- Fonctionnement : 
+  - Créer un AudioContext dédié au keep-alive.
+  - Utiliser un intervalle périodique (ex: toutes les 5-10 secondes) pour vérifier l'état du contexte via `audioContext.state`.
+  - Si l'état est "suspended", appeler `audioContext.resume()` pour le remettre en "running".
+  - S'assurer que le contexte est connecté à une destination audio (ex: un GainNode muet connecté à `audioContext.destination`) pour simuler une activité.
+  - Avantages : Pas de génération de son (même inaudible), consommation minimale ; Inconvénients : Dépend de la politique de suspension du navigateur (certains navigateurs suspendent agressivement les contextes inactifs).
+- S'assurer que le contexte audio reste dans l'état "running" même sans lecture active
+
+**Approche 3 : Signal de Test Périodique**
+- Jouer un son très court et silencieux (ex: 1ms de silence ou fréquence inaudible) toutes les 2-3 minutes
+- Utiliser un `AudioBuffer` pré-généré pour éviter la latence
+- S'assurer que le signal est complètement inaudible pour l'utilisateur
 
 **Technical Considerations**:
-- Check for environment assumptions in `index.html` (e.g. use of experimental APIs, insecure context, missing permission handling).
-- Inspect browser console logs and `navigator.mediaDevices.getUserMedia` error details on the failing devices.
-- Consider adding a lightweight compatibility check at startup (camera/microphone support, MIME types, feature detection) and surfacing a clear message if something essential is missing.
+- **Web Audio API**:
+  - Créer un `AudioContext` dédié pour le keep-alive si nécessaire
+  - Utiliser `OscillatorNode` avec `frequency` très basse/haute (20 Hz ou 20 kHz)
+  - Régler le `gain` à un niveau minimal (ex: 0.001 ou moins) pour être inaudible
+  - Utiliser `setInterval()` pour activer le signal périodiquement (ex: toutes les 30-60 secondes)
+  
+- **Intégration**:
+  - Activer le keep-alive uniquement pendant l'enregistrement (état `RECORDING`)
+  - Désactiver pendant la lecture des flashbacks pour éviter toute interférence
+  - Gérer proprement le nettoyage lors de l'arrêt de l'application
+  
+- **Performance**:
+  - Le signal doit être très léger en termes de CPU (fréquence basse, gain minimal)
+  - Éviter de créer de nouveaux `OscillatorNode` à chaque intervalle (réutiliser ou utiliser `AudioBuffer`)
+  - Tester l'impact sur la batterie (devrait être négligeable)
+
+- **Compatibilité**:
+  - Tester avec différents types de périphériques (Bluetooth, USB, casques filaires)
+  - Vérifier que le signal inaudible ne cause pas de problèmes avec certains périphériques
+  - Gérer les cas où l'API Web Audio n'est pas disponible (fallback)
+
+**Exemple de Code (Approche 1)**:
+```javascript
+class AudioKeepAlive {
+    constructor() {
+        this.audioContext = null;
+        this.oscillator = null;
+        this.keepAliveInterval = null;
+        this.isActive = false;
+    }
+
+    start() {
+        if (this.isActive) return;
+        
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Créer un signal inaudible (20 Hz, gain très faible)
+            this.oscillator = this.audioContext.createOscillator();
+            const gainNode = this.audioContext.createGain();
+            
+            this.oscillator.type = 'sine';
+            this.oscillator.frequency.value = 20; // 20 Hz (inaudible)
+            gainNode.gain.value = 0.001; // Très faible amplitude
+            
+            this.oscillator.connect(gainNode);
+            gainNode.connect(this.audioContext.destination);
+            
+            // Activer périodiquement (30 secondes d'intervalle)
+            this.keepAliveInterval = setInterval(() => {
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume();
+                }
+                // Jouer un signal très court (10ms)
+                this.oscillator.start();
+                setTimeout(() => {
+                    if (this.oscillator) {
+                        this.oscillator.stop();
+                        // Recréer pour le prochain cycle
+                        this.oscillator = this.audioContext.createOscillator();
+                        const gain = this.audioContext.createGain();
+                        this.oscillator.type = 'sine';
+                        this.oscillator.frequency.value = 20;
+                        gain.gain.value = 0.001;
+                        this.oscillator.connect(gain);
+                        gain.connect(this.audioContext.destination);
+                    }
+                }, 10);
+            }, 30000); // Toutes les 30 secondes
+            
+            this.isActive = true;
+        } catch (error) {
+            console.warn('Audio keep-alive non disponible:', error);
+        }
+    }
+
+    stop() {
+        if (!this.isActive) return;
+        
+        if (this.keepAliveInterval) {
+            clearInterval(this.keepAliveInterval);
+            this.keepAliveInterval = null;
+        }
+        
+        if (this.oscillator) {
+            this.oscillator.stop();
+            this.oscillator = null;
+        }
+        
+        if (this.audioContext) {
+            this.audioContext.close();
+            this.audioContext = null;
+        }
+        
+        this.isActive = false;
+    }
+}
+
+// Utilisation dans l'application
+const audioKeepAlive = new AudioKeepAlive();
+
+// Démarrer pendant l'enregistrement
+function startRecording() {
+    // ... code d'enregistrement existant ...
+    audioKeepAlive.start();
+}
+
+// Arrêter pendant la lecture ou l'arrêt
+function stopRecording() {
+    audioKeepAlive.stop();
+    // ... code d'arrêt existant ...
+}
+```
+
+**Dependencies**:
+- Web Audio API (`AudioContext`, `OscillatorNode`, `GainNode`)
+- Gestion des états de l'application (enregistrement vs lecture)
+
+**Recommended Approach**:
+1. Implémenter l'approche 1 (signal audio silencieux périodique) comme solution principale
+2. Tester avec différents périphériques audio (Bluetooth, USB, casques)
+3. Ajuster la fréquence et l'amplitude si nécessaire pour garantir l'inaudibilité
+4. Ajouter un toggle optionnel dans les paramètres pour activer/désactiver le keep-alive si certains utilisateurs préfèrent le comportement par défaut
+5. Monitorer l'impact sur la performance et la batterie
+
+**Priorité**: Moyenne-Haute (affecte l'expérience utilisateur lors de longues sessions)
 
 ---
 
-### DEPLOY-001: Deploy Application to Web Hosting {#deploy-001-deploy-application-to-web-hosting}
+### FEAT-001: Menu d'Options avec Mode Miroir {#feat-001-menu-doptions-avec-mode-miroir}
 
 **Description**:  
-Deploy the Flashback application to a web hosting service so that it is accessible from any device via a URL, without requiring local file access or a local server.
+Créer un menu d'options accessible depuis l'interface principale permettant de configurer divers paramètres de l'application, notamment le mode miroir pour l'affichage vidéo. Le mode miroir permet d'inverser horizontalement l'affichage de la vidéo, ce qui est utile pour les utilisateurs qui souhaitent voir leur reflet comme dans un miroir (utile pour les entraînements sportifs, la danse, etc.).
 
 **User Value**:
-- **Accessibility**: Users can access the application from any device with a web browser, without needing to download or install anything
-- **Sharing**: Easy to share the application with others via a simple URL
-- **Cross-platform**: Works on any device that supports modern web browsers
-- **No setup required**: Users don't need to set up a local development environment
+- **Personnalisation** : Les utilisateurs peuvent adapter l'affichage à leurs préférences
+- **Confort visuel** : Le mode miroir offre une expérience plus naturelle pour certains types d'entraînement
+- **Flexibilité** : Accès facile aux options de configuration sans encombrer l'interface principale
+- **Persistance** : Les préférences sont sauvegardées pour les sessions futures
 
 **Acceptance Criteria**:
-- [ ] Application is accessible via a public URL (HTTPS required for camera/microphone access)
-- [ ] All features work correctly in the hosted environment (recording, flashback, markers, etc.)
-- [ ] Application loads quickly and performs well over network connections
-- [ ] HTTPS certificate is properly configured (required for `getUserMedia` API)
-- [ ] Application is accessible from multiple devices and browsers
-- [ ] Error handling works correctly (e.g. camera/microphone permissions denied)
+- [ ] Un bouton ou icône "Options" est visible dans l'interface principale
+- [ ] Le menu d'options s'ouvre dans un modal ou un panneau latéral
+- [ ] Le menu contient au minimum une option pour activer/désactiver le mode miroir
+- [ ] Le mode miroir inverse horizontalement l'affichage de la vidéo (preview et flashbacks)
+- [ ] L'état du mode miroir est sauvegardé dans localStorage et restauré au chargement
+- [ ] Le menu peut être fermé via un bouton "Fermer" ou en cliquant en dehors du menu
+- [ ] L'interface reste utilisable et intuitive avec le menu ouvert
+- [ ] Le mode miroir fonctionne à la fois pour la preview en direct et pour les flashbacks
 
 **Technical Considerations**:
-- **Hosting options** to consider:
-  - Static hosting services (Netlify, Vercel, GitHub Pages, Cloudflare Pages)
-  - Traditional web hosting (shared hosting, VPS)
-  - Cloud platforms (AWS S3 + CloudFront, Google Cloud Storage, Azure Static Web Apps)
-- **HTTPS requirement**: The application requires HTTPS to access camera/microphone via `getUserMedia` API (browser security requirement)
-- **File structure**: The application is currently a single `index.html` file, which simplifies deployment
-- **No backend required**: The application is fully client-side, so no server-side code or database is needed
-- **Domain name**: Consider whether to use a custom domain or a subdomain of the hosting service
-- **Performance**: Ensure the hosting service provides good performance and low latency
-- **Cost**: Evaluate free vs. paid hosting options based on traffic and requirements
+- **Menu d'options**:
+  - Créer un modal ou un panneau latéral pour afficher les options
+  - Utiliser CSS pour le style et l'animation d'ouverture/fermeture
+  - Gérer l'état d'ouverture/fermeture du menu
+  
+- **Mode miroir**:
+  - Utiliser CSS `transform: scaleX(-1)` pour inverser horizontalement la vidéo
+  - Appliquer la transformation à la fois sur `videoPreview` et `flashbackVideo`
+  - S'assurer que la transformation n'affecte pas les autres éléments de l'interface
+  - Tester que le mode miroir fonctionne correctement avec les différentes résolutions vidéo
+  
+- **Persistance**:
+  - Sauvegarder l'état du mode miroir dans `localStorage` (ex: `mirrorModeEnabled`)
+  - Restaurer l'état au chargement de l'application
+  - Appliquer la transformation CSS dès le chargement si le mode miroir était activé
+  
+- **Intégration**:
+  - Ajouter un bouton/icône dans l'interface principale (ex: en haut à droite)
+  - Gérer l'ouverture/fermeture du menu via des événements JavaScript
+  - S'assurer que le menu ne bloque pas les interactions avec l'application principale
 
 **Dependencies**:
-- Current application is a single HTML file with embedded CSS and JavaScript
-- No build process required (can be deployed as-is)
-- HTTPS certificate (usually provided by hosting service)
+- Interface utilisateur existante
+- Système de localStorage pour la persistance
+- CSS pour les transformations et animations
 
 **Recommended Approach**:
-1. Choose a static hosting service (Netlify or Vercel recommended for ease of use and free HTTPS)
-2. Create an account and connect to the repository (if using Git) or upload the `index.html` file
-3. Configure custom domain (optional)
-4. Test on multiple devices and browsers
-5. Document the deployment URL and any access requirements
+1. Créer un composant modal pour le menu d'options
+2. Ajouter un bouton "Options" dans l'interface principale
+3. Implémenter le toggle du mode miroir avec sauvegarde dans localStorage
+4. Appliquer la transformation CSS `scaleX(-1)` sur les éléments vidéo
+5. Tester que le mode miroir fonctionne pour la preview et les flashbacks
+6. Ajouter d'autres options au menu si nécessaire (extensible pour futures fonctionnalités)
 
----
-
-### TECH-002: Monitor and Adapt to Default Audio Device Changes {#tech-002-monitor-and-adapt-to-default-audio-device-changes}
-
-**Description**:  
-Implement automatic detection and adaptation when the user's default audio input or output devices change (e.g., plugging/unplugging headphones, switching speakers, changing microphones). The application should regularly check the default audio devices and automatically route audio to/from the correct devices.
-
-**User Value**:
-- **Seamless experience**: Users don't need to manually reconfigure the application when they change audio devices
-- **Automatic adaptation**: Flashback playback automatically uses the new default output device (headphones, speakers, etc.)
-- **Recording continuity**: Recording automatically switches to the new default input device if the microphone changes
-- **No interruption**: Device changes don't require restarting the application or re-initializing the recording
-
-**Acceptance Criteria**:
-- [ ] Application periodically checks (e.g., every 1-2 seconds) for changes in the default audio output device
-- [ ] When default output device changes, flashback playback audio is automatically routed to the new device
-- [ ] Application periodically checks for changes in the default audio input device
-- [ ] When default input device changes during recording, the recording automatically switches to the new device (or at least detects and notifies the user)
-- [ ] Device changes don't cause crashes or loss of recording data
-- [ ] Works across different operating systems (macOS, Windows, Linux) and browsers
-
-**Technical Considerations**:
-- **Audio Output (Playback)**:
-  - Use `navigator.mediaDevices.enumerateDevices()` to detect available audio output devices
-  - Monitor for device changes using `navigator.mediaDevices.addEventListener('devicechange', ...)`
-  - For HTML5 video/audio elements, audio routing is typically handled by the browser automatically, but may need explicit device selection via `setSinkId()` API (if supported)
-  - Consider using Web Audio API `AudioContext` with `setSinkId()` for more control over output routing (browser support varies)
-  
-- **Audio Input (Recording)**:
-  - Monitor `navigator.mediaDevices` for device changes
-  - When input device changes, may need to:
-    - Option A: Automatically reinitialize `getUserMedia()` with the new default device (may interrupt recording)
-    - Option B: Detect the change and notify the user, allowing them to continue with current device or switch
-    - Option C: Continue with current stream but warn user that default device has changed
-  
-- **Implementation approach**:
-  - Add a periodic check (setInterval) to enumerate devices and compare with previously detected devices
-  - Use `devicechange` event listener for more efficient detection (supported in modern browsers)
-  - Store current device IDs to detect changes
-  - Handle device disconnection gracefully (fallback to system default)
-  
-- **Browser compatibility**:
-  - `setSinkId()` for output device selection has limited support (Chrome/Edge, not Safari/Firefox)
-  - `devicechange` event is well-supported in modern browsers
-  - May need fallback to periodic polling for older browsers
-
-**Dependencies**:
-- `navigator.mediaDevices` API (already used for `getUserMedia`)
-- Browser support for device enumeration and change detection
-- Web Audio API (optional, for advanced output routing)
-
-**Recommended Approach**:
-1. Implement `devicechange` event listener to detect device additions/removals
-2. Add periodic polling (every 1-2 seconds) as a fallback for browsers without `devicechange` support
-3. For audio output: Use `setSinkId()` if available, otherwise rely on browser's automatic routing
-4. For audio input: Detect changes and either auto-switch (if seamless) or notify user
-5. Test with common scenarios: plug/unplug headphones, switch Bluetooth devices, change system default device
-
----
-
-### UX-001: Display Time Offset Overlay on Video {#ux-001-display-time-offset-overlay-on-video}
-
-**Description**:  
-Display a brief, transparent overlay on the video showing the number of seconds moved backward or forward when navigating (e.g., using arrow keys, marker navigation, or timeline clicks). This provides immediate visual feedback about the navigation action performed.
-
-**User Value**:
-- **Immediate feedback**: Users instantly see how far they've navigated in time
-- **Spatial awareness**: Helps users understand their position relative to the recording timeline
-- **Confirmation**: Confirms that navigation actions (keyboard shortcuts, button clicks) have been registered
-- **Professional feel**: Similar to video editing software that shows time offsets during scrubbing
-
-**Acceptance Criteria**:
-- [ ] When navigating backward (ArrowLeft, ArrowUp, previous marker), display a brief overlay showing negative time offset (e.g., "-2s", "-5s")
-- [ ] When navigating forward (ArrowRight, ArrowDown, next marker), display a brief overlay showing positive time offset (e.g., "+1s", "+3s")
-- [ ] Overlay appears centered or in a consistent position on the video (e.g., center or top-center)
-- [ ] Overlay is semi-transparent and doesn't obstruct the video content significantly
-- [ ] Overlay automatically fades out after 1-2 seconds
-- [ ] Overlay shows the actual time offset calculated (respects exponential back/forward behavior)
-- [ ] Works for all navigation methods: keyboard shortcuts, button clicks, marker navigation, timeline clicks
-
-**Technical Considerations**:
-- **Overlay element**: Create a new DOM element positioned absolutely over the video container (similar to existing `video-overlay` for state indicator)
-- **Positioning**: Use CSS to center or position the overlay (e.g., `position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%)`)
-- **Styling**: 
-  - Semi-transparent background (e.g., `rgba(0, 0, 0, 0.7)`)
-  - Large, readable font (e.g., 24-32px)
-  - White or high-contrast text color
-  - Rounded corners, padding for readability
-- **Animation**: 
-  - Fade-in on display (e.g., `opacity: 0 → 1` with transition)
-  - Fade-out after timeout (e.g., `opacity: 1 → 0` then `display: none`)
-  - Consider subtle scale animation for emphasis
-- **Timing**: 
-  - Display duration: 1.5-2 seconds (configurable)
-  - Clear timeout if new navigation occurs before fade-out completes
-- **Format**: 
-  - Negative values: "-2s", "-5s", "-10s" (backward)
-  - Positive values: "+1s", "+3s", "+8s" (forward)
-  - Zero or very small offsets (< 0.5s) may not need display
-- **Integration points**:
-  - `handleBack()` / `handleBackKey()`: Calculate offset and display
-  - `handleForward()` / `handleForwardKey()`: Calculate offset and display
-  - `handleNavigateFlashbackMarker()`: Calculate offset from current position to target marker
-  - `handleTimelineClick()`: Calculate offset from current position to clicked position
-
-**Dependencies**:
-- Existing navigation functions (`handleBack`, `handleForward`, `handleNavigateFlashbackMarker`, `handleTimelineClick`)
-- Video container element (already exists)
-- CSS for positioning and animations
-
-**Recommended Approach**:
-1. Create a new overlay element in the constructor (similar to `videoOverlay` for state indicator)
-2. Create helper function `showTimeOffsetOverlay(seconds)` that:
-   - Formats the offset (e.g., "-2s" or "+3s")
-   - Displays the overlay with fade-in animation
-   - Sets a timeout to fade-out after 1.5-2 seconds
-3. Integrate calls to `showTimeOffsetOverlay()` in all navigation functions
-4. Calculate actual time offset in each navigation function (current time vs. target time)
-5. Test with all navigation methods to ensure consistent behavior
+**Priorité**: Moyenne (améliore l'expérience utilisateur mais n'est pas bloquant)
 
 ---
 
@@ -485,6 +403,109 @@ Tester le comportement de l'application dans différents scénarios impliquant d
 - Certains scénarios peuvent nécessiter des outils de test automatisés (simulation de changements de périphériques)
 - Les tests de fermeture/veille peuvent nécessiter des tests sur différents systèmes d'exploitation
 - Documenter les versions de navigateur et OS utilisées pour chaque test
+
+---
+
+### TEST-002: Vérifier la Lecture de Flashback Après un Enregistrement de Plus de 30 Minutes (peut être fait pendant une séance de sport) {#test-002-vérifier-la-lecture-de-flashback-après-un-enregistrement-de-plus-de-30-minutes-peut-être-fait-pendant-une-séance-de-sport}
+
+**Description**:  
+Vérifier que la lecture d'un flashback fonctionne correctement après un enregistrement de plus de 30 minutes. Ce test vise à garantir que l'application gère correctement les enregistrements de longue durée et que les flashbacks restent accessibles et lisibles même après une session d'enregistrement prolongée.
+
+**Scénario à Tester**:
+
+1. **Enregistrement de longue durée**:
+   - Démarrer un enregistrement et le laisser tourner pendant plus de 30 minutes
+   - Vérifier que l'enregistrement continue sans interruption pendant toute la durée
+   - Vérifier que les données sont correctement stockées et accessibles
+
+2. **Lecture de flashback après enregistrement long**:
+   - Après l'enregistrement de 30+ minutes, naviguer vers un flashback (retour en arrière)
+   - Vérifier que la lecture du flashback démarre correctement
+   - Vérifier que la synchronisation audio/vidéo est maintenue
+   - Vérifier que la navigation dans le flashback fonctionne (avancer, reculer)
+   - Vérifier que les différentes parties de l'enregistrement sont accessibles (début, milieu, fin)
+
+**Acceptance Criteria**:
+- [ ] L'enregistrement continue sans interruption pendant plus de 30 minutes
+- [ ] Les flashbacks sont accessibles après un enregistrement de 30+ minutes
+- [ ] La lecture des flashbacks démarre correctement sans erreur
+- [ ] La synchronisation audio/vidéo est maintenue pendant la lecture
+- [ ] La navigation dans les flashbacks fonctionne correctement (avancer, reculer, saut temporel)
+- [ ] Toutes les parties de l'enregistrement sont accessibles (début, milieu, fin)
+- [ ] Aucune perte de données ou corruption lors de la lecture
+- [ ] Les performances restent acceptables (pas de ralentissement significatif)
+- [ ] L'affichage de la timeline et des barres reste cohérent
+
+**Résultats Attendus**:
+- Rapport de test documentant le comportement observé
+- Confirmation que les flashbacks fonctionnent correctement après un enregistrement long
+- Identification de tout problème de performance ou de corruption de données
+- Recommandations pour améliorer la gestion des enregistrements de longue durée (si nécessaire)
+
+**Technical Considerations**:
+- Ce test nécessite un test manuel de longue durée (30+ minutes)
+- Vérifier la gestion mémoire pendant l'enregistrement long (rolling buffer, trim)
+- Vérifier que les sessions sont correctement gérées et finalisées
+- Vérifier que les chunks sont correctement stockés et accessibles
+- Documenter les versions de navigateur et OS utilisées
+- Tester avec différentes configurations (maxDuration différentes)
+- Vérifier que le rolling buffer fonctionne correctement avec les enregistrements longs
+
+**Priorité**: Moyenne-Haute (garantit la robustesse pour les sessions d'enregistrement prolongées)
+
+**Note**: Ce test peut être effectué pendant une séance de sport, permettant de valider le comportement dans un contexte d'utilisation réel tout en optimisant le temps de test.
+
+---
+
+### TEST-003: Vérifier que la Mini-Enceinte ne S'Éteint Pas Après 30 Minutes d'Enregistrement (peut être fait pendant une séance de sport) {#test-003-vérifier-que-la-mini-enceinte-ne-setient-pas-après-30-minutes-denregistrement-peut-être-fait-pendant-une-séance-de-sport}
+
+**Description**:  
+Vérifier que la mini-enceinte (ou casque Bluetooth/USB) reste active et ne s'éteint pas après 30 minutes d'enregistrement continu. Ce test vise à valider que la solution de keep-alive audio (BUG-020) fonctionne correctement sur des sessions d'enregistrement prolongées et que l'enceinte reste active même en l'absence de lecture audio pendant une période prolongée.
+
+**Scénario à Tester**:
+
+1. **Enregistrement de longue durée avec keep-alive**:
+   - Démarrer un enregistrement et le laisser tourner pendant plus de 30 minutes
+   - Vérifier que l'enregistrement continue sans interruption pendant toute la durée
+   - Vérifier que la mini-enceinte reste active (ne s'éteint pas) pendant toute la durée
+   - Vérifier qu'aucun son audible n'est généré pour maintenir l'enceinte active
+
+2. **Test de lecture après enregistrement long**:
+   - Après l'enregistrement de 30+ minutes, naviguer vers un flashback (retour en arrière)
+   - Vérifier que la lecture du flashback démarre immédiatement sans délai d'activation de l'enceinte
+   - Vérifier que l'audio est audible dès le début de la lecture
+   - Vérifier qu'il n'y a pas de coupure ou d'interruption audio
+
+**Acceptance Criteria**:
+- [ ] L'enregistrement continue sans interruption pendant plus de 30 minutes
+- [ ] La mini-enceinte reste active pendant toute la durée de l'enregistrement (ne s'éteint pas)
+- [ ] Aucun son audible n'est généré pour maintenir l'enceinte active
+- [ ] La lecture des flashbacks démarre immédiatement sans délai d'activation de l'enceinte
+- [ ] L'audio est audible dès le début de la lecture
+- [ ] Aucune coupure ou interruption audio lors de la lecture
+- [ ] Le test fonctionne avec différents types de périphériques (Bluetooth, USB, casques)
+- [ ] Pas d'impact négatif sur la performance ou la consommation de batterie
+
+**Résultats Attendus**:
+- Rapport de test documentant le comportement observé
+- Confirmation que la mini-enceinte reste active pendant 30+ minutes d'enregistrement
+- Confirmation que la lecture démarre immédiatement sans délai
+- Identification de tout problème de mise en veille ou d'extinction de l'enceinte
+- Recommandations pour améliorer le keep-alive si nécessaire
+
+**Technical Considerations**:
+- Ce test nécessite un test manuel de longue durée (30+ minutes)
+- Vérifier que le système de keep-alive audio (BUG-020) fonctionne correctement
+- Vérifier que les signaux inaudibles sont bien générés à intervalles réguliers
+- Tester avec différents types de périphériques audio (Bluetooth, USB, casques filaires)
+- Documenter les versions de navigateur et OS utilisées
+- Documenter le type et modèle de l'enceinte testée
+- Vérifier l'impact sur la consommation de batterie (devrait être négligeable)
+- Tester dans différents contextes (avec/sans interaction utilisateur)
+
+**Priorité**: Moyenne-Haute (valide la solution BUG-020 sur des sessions prolongées)
+
+**Note**: Ce test peut être effectué pendant une séance de sport, permettant de valider le comportement dans un contexte d'utilisation réel tout en optimisant le temps de test. Il peut être combiné avec TEST-002 pour tester simultanément la lecture de flashback et le keep-alive audio.
 
 ---
 
