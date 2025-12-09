@@ -549,6 +549,11 @@ class FlashbackRecorder {
         this.inactivityWarningShown = false; // Éviter multiples alertes pendant une session
         this.inactivityEventListeners = []; // Stocker les listeners pour cleanup
 
+        // Onboarding and tooltips (UX-003)
+        this.onboardingCurrentStep = 0; // Current step in onboarding (0-3)
+        this.onboardingModal = null; // Reference to onboarding modal
+        this.tooltipElements = new Map(); // Map of element -> tooltip div
+
         // Expose the global instance for easier debugging
         window.flashbackRecorder = this;
 
@@ -618,6 +623,12 @@ class FlashbackRecorder {
         
         this.setState('recording');
         this.startRecording(); // Auto-start as per US-001
+        
+        // Show onboarding tutorial on first launch (UX-003)
+        this.showOnboardingIfFirstTime();
+        
+        // Initialize contextual tooltips (UX-003)
+        this.initContextualTooltips();
     }
 
     setState(newState) {
@@ -628,6 +639,11 @@ class FlashbackRecorder {
         const oldState = this.state;
         this.state = newState;
         this.updateMarkerControls();
+        
+        // Show first flashback overlay (UX-003)
+        if (newState === 'flashback' && oldState !== 'flashback') {
+            this.showFirstFlashbackOverlay();
+        }
     }
 
     initEventListeners() {
@@ -2522,6 +2538,321 @@ class FlashbackRecorder {
 
         modal.appendChild(content);
         document.body.appendChild(modal);
+    }
+
+    // === ONBOARDING AND TOOLTIPS (UX-003) ===
+
+    showOnboardingIfFirstTime() {
+        const onboardingShown = localStorage.getItem('flashbackOnboardingShown') === 'true';
+        if (!onboardingShown) {
+            this.onboardingCurrentStep = 0;
+            this.showOnboardingModal();
+        }
+    }
+
+    showOnboardingModal() {
+        // Remove existing modal if any
+        const existingModal = document.getElementById('onboardingModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'onboardingModal';
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100%';
+        modal.style.height = '100%';
+        modal.style.background = 'rgba(0, 0, 0, 0.7)';
+        modal.style.display = 'flex';
+        modal.style.justifyContent = 'center';
+        modal.style.alignItems = 'center';
+        modal.style.zIndex = '10001';
+        modal.style.opacity = '0';
+        modal.style.transition = 'opacity 0.3s ease';
+
+        const steps = [
+            "Welcome! Flashback Mirror records continuously to help you easily review yourself and improve (sports, dance, performing arts, public speaking...).",
+            "Use ← to go back in time (includes video and audio – be careful if in public! 😉).",
+            "Click on the timeline to review a specific moment.",
+            "Recording has started automatically. Happy training!"
+        ];
+
+        const content = document.createElement('div');
+        content.style.background = 'white';
+        content.style.color = 'black';
+        content.style.padding = '32px';
+        content.style.borderRadius = '12px';
+        content.style.maxWidth = '500px';
+        content.style.textAlign = 'center';
+        content.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.3)';
+        content.style.position = 'relative';
+
+        const stepText = document.createElement('p');
+        stepText.style.fontSize = '16px';
+        stepText.style.lineHeight = '1.6';
+        stepText.style.marginBottom = '24px';
+        stepText.style.minHeight = '60px';
+        stepText.textContent = steps[this.onboardingCurrentStep] + ` (${this.onboardingCurrentStep + 1}/4)`;
+        content.appendChild(stepText);
+
+        const checkboxContainer = document.createElement('div');
+        checkboxContainer.style.marginBottom = '20px';
+        checkboxContainer.style.textAlign = 'left';
+        checkboxContainer.style.display = 'flex';
+        checkboxContainer.style.alignItems = 'center';
+        checkboxContainer.style.justifyContent = 'center';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = 'neverShowOnboarding';
+        checkbox.style.marginRight = '8px';
+        checkboxContainer.appendChild(checkbox);
+
+        const label = document.createElement('label');
+        label.htmlFor = 'neverShowOnboarding';
+        label.textContent = 'Never show tutorial again';
+        label.style.cursor = 'pointer';
+        label.style.fontSize = '14px';
+        checkboxContainer.appendChild(label);
+        content.appendChild(checkboxContainer);
+
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.gap = '12px';
+        buttonContainer.style.justifyContent = 'center';
+
+        if (this.onboardingCurrentStep < 3) {
+            const nextButton = document.createElement('button');
+            nextButton.textContent = 'Next';
+            nextButton.style.background = '#007bff';
+            nextButton.style.color = 'white';
+            nextButton.style.border = 'none';
+            nextButton.style.padding = '10px 24px';
+            nextButton.style.borderRadius = '6px';
+            nextButton.style.cursor = 'pointer';
+            nextButton.style.fontSize = '14px';
+            nextButton.style.fontWeight = '500';
+            nextButton.onclick = () => {
+                this.onboardingCurrentStep++;
+                if (this.onboardingCurrentStep < 4) {
+                    modal.remove();
+                    this.showOnboardingModal();
+                } else {
+                    this.closeOnboardingModal(checkbox.checked);
+                }
+            };
+            buttonContainer.appendChild(nextButton);
+        } else {
+            const okButton = document.createElement('button');
+            okButton.textContent = 'OK';
+            okButton.style.background = '#007bff';
+            okButton.style.color = 'white';
+            okButton.style.border = 'none';
+            okButton.style.padding = '10px 24px';
+            okButton.style.borderRadius = '6px';
+            okButton.style.cursor = 'pointer';
+            okButton.style.fontSize = '14px';
+            okButton.style.fontWeight = '500';
+            okButton.onclick = () => {
+                this.closeOnboardingModal(checkbox.checked);
+            };
+            buttonContainer.appendChild(okButton);
+        }
+
+        content.appendChild(buttonContainer);
+        modal.appendChild(content);
+
+        // Close on outside click
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                // If clicking outside, don't show remaining steps
+                localStorage.setItem('flashbackOnboardingShown', 'true');
+                modal.remove();
+            }
+        };
+
+        document.body.appendChild(modal);
+        this.onboardingModal = modal;
+
+        // Fade in
+        setTimeout(() => {
+            modal.style.opacity = '1';
+        }, 10);
+    }
+
+    closeOnboardingModal(neverShowAgain) {
+        if (this.onboardingModal) {
+            this.onboardingModal.style.opacity = '0';
+            setTimeout(() => {
+                if (this.onboardingModal && this.onboardingModal.parentNode) {
+                    this.onboardingModal.remove();
+                }
+                this.onboardingModal = null;
+            }, 300);
+        }
+        if (neverShowAgain) {
+            localStorage.setItem('flashbackOnboardingShown', 'true');
+        }
+    }
+
+    initContextualTooltips() {
+        // Timeline tooltip
+        if (this.timelineBar) {
+            this.addTooltip(this.timelineBar, 'Click to jump to a specific moment.');
+        }
+        if (this.photoTimelineScroll) {
+            this.addTooltip(this.photoTimelineScroll, 'Click to jump to a specific moment.');
+        }
+        // Audio timeline (waveform) tooltip
+        if (this.waveformCanvas) {
+            this.addTooltip(this.waveformCanvas, 'Click to jump to a specific moment.');
+        }
+
+        // Navigation buttons tooltips
+        if (this.flashbackBtn) {
+            this.addTooltip(this.flashbackBtn, 'Go back in time (quick repeated presses increase the distance).');
+        }
+        if (this.forwardBtn) {
+            this.addTooltip(this.forwardBtn, 'Go forward in time (quick repeated presses increase the distance).');
+        }
+
+        // Marker buttons tooltips
+        if (this.addMarkerBtn) {
+            this.addTooltip(this.addMarkerBtn, 'Create a marker. Navigate to previous/next marker with the Up/Down buttons.');
+        }
+        if (this.prevMarkerBtn) {
+            this.addTooltip(this.prevMarkerBtn, 'Navigate to previous marker.');
+        }
+        if (this.nextMarkerBtn) {
+            this.addTooltip(this.nextMarkerBtn, 'Navigate to next marker.');
+        }
+    }
+
+    addTooltip(element, text) {
+        if (!element || !text) return;
+
+        let tooltip = null;
+
+        const showTooltip = (e) => {
+            if (tooltip) return; // Already showing
+
+            tooltip = document.createElement('div');
+            tooltip.className = 'contextual-tooltip';
+            tooltip.textContent = text;
+            tooltip.style.position = 'absolute';
+            tooltip.style.background = 'rgba(0, 0, 0, 0.85)';
+            tooltip.style.color = 'white';
+            tooltip.style.padding = '8px 12px';
+            tooltip.style.borderRadius = '6px';
+            tooltip.style.fontSize = '13px';
+            tooltip.style.zIndex = '10000';
+            tooltip.style.pointerEvents = 'none';
+            tooltip.style.whiteSpace = 'nowrap';
+            tooltip.style.maxWidth = '250px';
+            tooltip.style.whiteSpace = 'normal';
+            tooltip.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+
+            document.body.appendChild(tooltip);
+
+            // Position tooltip
+            const rect = element.getBoundingClientRect();
+            const tooltipRect = tooltip.getBoundingClientRect();
+            
+            // Position above by default, adjust if needed
+            let top = rect.top - tooltipRect.height - 8;
+            let left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
+
+            // Adjust if tooltip goes off screen
+            if (top < 0) {
+                top = rect.bottom + 8; // Show below instead
+            }
+            if (left < 0) {
+                left = 8;
+            }
+            if (left + tooltipRect.width > window.innerWidth) {
+                left = window.innerWidth - tooltipRect.width - 8;
+            }
+
+            tooltip.style.top = top + 'px';
+            tooltip.style.left = left + 'px';
+
+            // Fade in
+            tooltip.style.opacity = '0';
+            tooltip.style.transition = 'opacity 0.2s ease';
+            setTimeout(() => {
+                if (tooltip) tooltip.style.opacity = '1';
+            }, 10);
+        };
+
+        const hideTooltip = () => {
+            if (tooltip) {
+                tooltip.style.opacity = '0';
+                setTimeout(() => {
+                    if (tooltip && tooltip.parentNode) {
+                        tooltip.remove();
+                    }
+                    tooltip = null;
+                }, 200);
+            }
+        };
+
+        element.addEventListener('mouseenter', showTooltip);
+        element.addEventListener('mouseleave', hideTooltip);
+        element.addEventListener('click', hideTooltip);
+
+        this.tooltipElements.set(element, { showTooltip, hideTooltip, tooltip });
+    }
+
+    showFirstFlashbackOverlay() {
+        const firstFlashbackShown = localStorage.getItem('flashbackFirstTimeShown') === 'true';
+        if (firstFlashbackShown) return;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'firstFlashbackOverlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '50%';
+        overlay.style.left = '50%';
+        overlay.style.transform = 'translate(-50%, -50%)';
+        overlay.style.background = 'rgba(0, 0, 0, 0.85)';
+        overlay.style.color = 'white';
+        overlay.style.padding = '20px 32px';
+        overlay.style.borderRadius = '8px';
+        overlay.style.fontSize = '16px';
+        overlay.style.fontWeight = '500';
+        overlay.style.zIndex = '10000';
+        overlay.style.textAlign = 'center';
+        overlay.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
+        overlay.textContent = 'You are in flashback mode. Use Esc to record again.';
+
+        document.body.appendChild(overlay);
+
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            if (overlay && overlay.parentNode) {
+                overlay.style.opacity = '0';
+                overlay.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => {
+                    if (overlay && overlay.parentNode) {
+                        overlay.remove();
+                    }
+                }, 300);
+            }
+        }, 5000);
+
+        // Also allow manual dismissal
+        overlay.onclick = () => {
+            overlay.style.opacity = '0';
+            overlay.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => {
+                if (overlay && overlay.parentNode) {
+                    overlay.remove();
+                }
+            }, 300);
+        };
+
+        localStorage.setItem('flashbackFirstTimeShown', 'true');
     }
 
     // === STARTING AND STOPPING RECORDING ===
