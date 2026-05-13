@@ -434,6 +434,104 @@ Note : Factorise au maximum avec les fonctionnalités déjà existantes, notamme
 
 ---
 
+### UX-003: Onboarding Tutorial and Contextual Tooltips {#ux-003-onboarding-tutorial-and-contextual-tooltips}
+
+**Description**:  
+Implement an onboarding tutorial modal and contextual tooltips to help new users quickly understand Flashback Mirror's unique interface and functionality. The application combines continuous recording, unified timeline, exponential navigation (flashback), and marker features in a way that goes beyond traditional video recorders or players, which can be confusing for new users.
+
+**User Value**:
+- **Quick understanding** : New users can grasp the core concepts and use cases in 1-2 minutes
+- **Reduced learning curve** : Contextual help guides users through their first interactions
+- **Better adoption** : Users are more likely to use advanced features if they understand them quickly
+- **Professional experience** : Onboarding demonstrates attention to user experience
+
+**Acceptance Criteria**:
+
+**Onboarding Tutorial Modal**:
+- [ ] A modal appears on first launch (detected via localStorage) and as long as the "Never show tutorial again" is not clicked"
+- [ ] The modal displays 4 short steps:
+  1. "Welcome! Flashback Mirror records continuously to help you easily review yourself and improve (sports, dance, performing arts, public speaking...). (1/4)"
+  2. "Use ← to go back in time (includes video and audio – be careful if in public! 😉). (2/4)"
+  3. "Click on the timeline to review a specific moment. (3/4)"
+  4. "Recording has started automatically. Happy training! (4/4)"
+- [ ] The modal includes a checkbox or button "Never show tutorial again" for persistence
+- [ ] The modal can be closed via a button ("Next" or "OK") or clicking outside. If click outside, following modals are not displayed
+- [ ] The preference is saved in localStorage and respected on subsequent visits
+
+**Contextual Tooltips**:
+- [ ] **Timeline hover**: Tooltip displays "Click to jump to a specific moment."
+- [ ] **←/→ buttons hover**: Tooltip displays "Go back/forward in time (quick repeated presses increase the distance)."
+- [ ] **Mark button hover**: Tooltip displays "Click on Mark to create a marker. Navigate to previous/next marker with the Up and Down buttons."
+- [ ] **Marker Up/Down buttons hover**: Tooltip displays "Navigate to previous/next marker."
+- [ ] Tooltips appear on hover and disappear when the cursor leaves
+- [ ] Tooltips are positioned appropriately and don't obstruct the interface
+
+**Contextual Overlays**:
+- [ ] **First flashback**: When user enters flashback mode for the first time, display an overlay: "You are in flashback mode. Use Esc to record again."
+- [ ] The overlay appears temporarily (e.g., 5 seconds) or can be dismissed
+- [ ] The overlay doesn't appear again after the first flashback (saved in localStorage)
+
+**Technical Considerations**:
+- **Onboarding Modal**:
+  - Check `localStorage.getItem('flashbackOnboardingShown')` on page load
+  - Create a modal component with CSS styling (centered, semi-transparent background)
+  - Use CSS animations for smooth appearance/disappearance
+  - Save preference in localStorage when "Never show again" is checked
+  
+- **Tooltips**:
+  - Use CSS `::before` or `::after` pseudo-elements, or create tooltip divs dynamically
+  - Position tooltips relative to the hovered element (above, below, or to the side)
+  - Use JavaScript event listeners (`mouseenter`, `mouseleave`) to show/hide tooltips
+  - Ensure tooltips don't overflow viewport boundaries
+  - Consider using a tooltip library (e.g., Tippy.js) for advanced positioning and animations
+  
+- **Contextual Overlays**:
+  - Track first flashback entry via localStorage (`flashbackFirstTime`)
+  - Display overlay when entering flashback mode for the first time
+  - Use CSS for positioning and styling (similar to existing overlays like time offset overlay)
+  - Auto-dismiss after timeout or allow manual dismissal
+
+**Dependencies**:
+- Interface utilisateur existante
+- Système de localStorage pour la persistance
+- CSS pour les styles et animations
+- JavaScript pour la gestion des événements et états
+
+**Recommended Approach**:
+1. Implement the onboarding modal first (simpler, high impact)
+2. Add tooltips to key interactive elements (timeline, navigation buttons, markers)
+3. Add contextual overlay for first flashback
+4. Test with new users to validate effectiveness
+5. Iterate based on feedback
+
+**Implementation Details**:
+
+**Onboarding Modal Structure**:
+```javascript
+// Check on page load
+if (!localStorage.getItem('flashbackOnboardingShown')) {
+    showOnboardingModal();
+}
+
+function showOnboardingModal() {
+    // Create modal with 4 steps
+    // Add checkbox "Never show again"
+    // Save preference on close
+}
+```
+
+**Tooltip Implementation**:
+```javascript
+// Add data-tooltip attributes to elements
+// Or use event listeners on hover
+element.addEventListener('mouseenter', showTooltip);
+element.addEventListener('mouseleave', hideTooltip);
+```
+
+**Priority**: High (significantly improves user onboarding and reduces confusion)
+
+---
+
 
 ## Technical Constraints
 

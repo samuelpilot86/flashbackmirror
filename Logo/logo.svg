@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#f0f0f0" rx="50"/>
+  
+  <!-- Mirror frame -->
+  <rect x="100" y="50" width="312" height="412" fill="#e0e0e0" stroke="#808080" stroke-width="20" rx="20"/>
+  
+  <!-- Mirror surface -->
+  <rect x="120" y="70" width="272" height="372" fill="#ffffff" rx="10"/>
+  
+  <!-- Rewind symbol in mirror -->
+  <path d="M180 200 L180 300 L130 250 Z" fill="#000000"/> <!-- Left triangle -->
+  <path d="M230 200 L230 300 L180 250 Z" fill="#000000"/> <!-- Right triangle -->
+  
+  <!-- Singer figure -->
+  <!-- Head -->
+  <circle cx="256" cy="150" r="30" fill="#ffdab9" stroke="#000" stroke-width="4"/>
+  <!-- Body -->
+  <line x1="256" y1="180" x2="256" y2="300" stroke="#000" stroke-width="8"/>
+  <!-- Arms -->
+  <line x1="256" y1="220" x2="220" y2="250" stroke="#000" stroke-width="6"/> <!-- Left arm -->
+  <line x1="256" y1="220" x2="292" y2="250" stroke="#000" stroke-width="6"/> <!-- Right arm holding mic -->
+  <!-- Microphone -->
+  <rect x="292" y="245" width="20" height="10" fill="#000" rx="2"/>
+  <line x1="302" y1="255" x2="302" y2="280" stroke="#000" stroke-width="4"/> <!-- Mic handle -->
+  <!-- Legs -->
+  <line x1="256" y1="300" x2="236" y2="380" stroke="#000" stroke-width="8"/>
+  <line x1="256" y1="300" x2="276" y2="380" stroke="#000" stroke-width="8"/>
+  
+  <!-- Hair (simple) -->
+  <path d="M226 150 Q256 120 286 150" fill="none" stroke="#8b4513" stroke-width="8" stroke-linecap="round"/>
+  
+  <!-- Mouth (singing) -->
+  <ellipse cx="256" cy="165" rx="10" ry="5" fill="#ff0000"/>
+</svg>

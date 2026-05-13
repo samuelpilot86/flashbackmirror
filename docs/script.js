@@ -669,9 +669,13 @@ class FlashbackRecorder {
         this.durationRange.addEventListener('input', () => this.updateDurationFromRange());
         this.durationValue.addEventListener('change', () => this.updateDurationFromInput());
 
+        // Debug panel toggle - DISABLED to simplify UI
+        // To re-enable for debugging: uncomment the code below and remove "display: none;" in CSS for .debug-panel and .debug-panel-toggle
+        /*
         if (this.debugPanelToggle) {
             this.debugPanelToggle.addEventListener('click', () => this.toggleDebugPanel());
         }
+        */
 
         document.addEventListener('keydown', (e) => {
             const active = document.activeElement;
@@ -2087,26 +2091,10 @@ class FlashbackRecorder {
         // Don't force style.width - let CSS (width: 100%) handle automatic resizing
 
         if (visibleFrames.length === 0) {
-            console.log('renderPhotoTimeline: No visible frames to display', {
-                totalFrames: totalFramesBeforeFilter,
-                windowStart,
-                windowEnd,
-                windowDuration,
-                allFrameTimestamps: this.photoFrames.map(f => f.timestamp)
-            });
             return; // No frames to display
         }
         
         const visibleTimestamps = visibleFrames.map(f => f.timestamp);
-        console.log('renderPhotoTimeline: Filtering and rendering', {
-            totalFrames: totalFramesBeforeFilter,
-            visibleFrames: visibleFrames.length,
-            windowStart,
-            windowEnd,
-            windowDuration,
-            containerWidth,
-            visibleTimestamps
-        });
 
         // Create thumbnails for all visible frames
         let thumbnailsCreated = 0;
@@ -2134,11 +2122,6 @@ class FlashbackRecorder {
 
             this.photoTimelineScroll.appendChild(thumbnail);
             thumbnailsCreated++;
-        });
-        
-        console.log('renderPhotoTimeline: Thumbnails created', {
-            thumbnailsCreated,
-            expectedThumbnails: visibleFrames.length
         });
     }
 

@@ -18,12 +18,8 @@ Une fois GitHub Pages configuré, l'application sera accessible à :
 ## Mise à jour
 
 Pour mettre à jour l'application en ligne :
-1. Modifier les fichiers dans `App/`
-2. Copier les fichiers modifiés vers `docs/` :
-   ```bash
-   cp App/index.html App/script.js App/styles.css docs/
-   ```
-3. Commiter et pousser :
+1. Modifier les fichiers dans `docs/` (`index.html`, `script.js`, `styles.css`, etc.).
+2. Commiter et pousser :
    ```bash
    git add docs/
    git commit -m "Mise à jour de l'application"

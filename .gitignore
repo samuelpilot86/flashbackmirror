@@ -22,3 +22,6 @@ npm-debug.log*
 *.tmp
 *.temp
 
+# Sauvegardes locales HTML / archives (non déployées)
+docs/index *.html
+docs/old/

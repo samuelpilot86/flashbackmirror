@@ -21,50 +21,22 @@ This backlog contains future enhancements and features planned for the Flashback
   The table of contents will automatically link to the sections when viewed in a Markdown viewer.
 -->
 
-- [US-009: Stop Flashback & Resume Recording](#us-009-stop-flashback--resume-recording)
 - [BUG-015: Spacebar Adds Space in Max Duration Input Instead of Marker](#bug-015-spacebar-adds-space-in-max-duration-input-instead-of-marker)
-- [BUG-019: Images Trop Rapprochées dans la Photo Timeline](#bug-019-images-trop-rapprochees-dans-la-photo-timeline)
 - [BUG-020: Mini-Enceinte S'Éteint Après une Certaine Durée](#bug-020-mini-enceinte-setient-apres-une-certaine-duree)
+- [BUG-022: Message "Aucun périphérique audio n'a été détecté" S'Affiche Trop Tôt](#bug-022-message-aucun-périphérique-audio-na-été-détecté-saffiche-trop-tôt)
+- [BUG-023: Créer des Logs pour Déboguer l'Impossibilité de Lire la Vidéo Après un Enregistrement Prolongé](#bug-023-créer-des-logs-pour-déboguer-limpossibilité-de-lire-la-vidéo-après-un-enregistrement-prolongé)
 - [FEAT-001: Menu d'Options avec Mode Miroir](#feat-001-menu-doptions-avec-mode-miroir)
-- [UX-003: Onboarding Tutorial and Contextual Tooltips](#ux-003-onboarding-tutorial-and-contextual-tooltips)
+- [FEAT-002: Paramétrage des Sources d'Enregistrement et de Restitution Audio et Vidéo](#feat-002-paramétrage-des-sources-denregistrement-et-de-restitution-audio-et-vidéo)
+- [FEAT-003: Marquage Automatique de Moments Importants](#feat-003-marquage-automatique-de-moments-importants)
+- [FEAT-004: Paramétrage de la Vitesse de Replay](#feat-004-paramétrage-de-la-vitesse-de-replay)
+- [MARKETING-001: Créer un Logo pour Flashback Mirror](#marketing-001-créer-un-logo-pour-flashback-mirror)
+- [MARKETING-002: Diffuser l'Application sur le Profil LinkedIn](#marketing-002-diffuser-lapplication-sur-le-profil-linkedin)
 - [TEST-001: Tests de Comportement avec Changements d'Équipement et États Système](#test-001-tests-de-comportement-avec-changements-dequipement-et-etats-systeme)
 - [TEST-002: Vérifier la Lecture de Flashback Après un Enregistrement de Plus de 30 Minutes (peut être fait pendant une séance de sport)](#test-002-vérifier-la-lecture-de-flashback-après-un-enregistrement-de-plus-de-30-minutes-peut-être-fait-pendant-une-séance-de-sport)
 - [TEST-003: Vérifier que la Mini-Enceinte ne S'Éteint Pas Après 30 Minutes d'Enregistrement (peut être fait pendant une séance de sport)](#test-003-vérifier-que-la-mini-enceinte-ne-setient-pas-après-30-minutes-denregistrement-peut-être-fait-pendant-une-séance-de-sport)
 
 
 ## Backlog Items
-
-### US-009: Stop Flashback & Resume Recording {#us-009-stop-flashback--resume-recording}
-(non-urgent because navigating using the Down button does the same)
-**As a** user watching a flashback,
-**I want** to be able to stop the flashback playback early and resume recording immediately,
-**So that** I don't have to wait for long flashbacks to complete and can continue recording without interruption.
-
-**Acceptance Criteria:**
-- [ ] "Stop Flashback" button appears during flashback playback
-- [ ] Clicking the button immediately stops playback and starts recording
-- [ ] Same behavior as natural end of playback (recording resumes seamlessly)
-- [ ] Button hidden during recording state and when stopped
-- [ ] Keyboard shortcut (Escape key) for same functionality
-- [ ] Visual feedback during transition from playback to recording
-- [ ] No data loss or recording gaps during transition
-
-**Example Behavior:**
-- **During flashback**: "Stop Flashback" button visible
-- **Click/Escape**: Playback stops immediately, recording starts immediately
-- **Same as natural end**: No difference in behavior between early stop and natural completion
-- **Quick workflow**: User can exit long flashbacks and continue recording seamlessly
-
-**Technical Requirements:**
-- Playback interruption handling without corruption
-- Seamless transition from playback to recording state
-- UI state management for button visibility (only during playback)
-- Keyboard event handling (Escape key)
-- Maintain recording continuity and session integrity
-- No performance impact on transition speed
-
----
-
 
 ### BUG-015: Spacebar Adds Space in Max Duration Input Instead of Marker {#bug-015-spacebar-adds-space-in-max-duration-input-instead-of-marker}
 
@@ -79,41 +51,6 @@ When the user edits the *Max Duration* numeric field via keyboard and then press
 **Technical Considerations**:
 - Review the global `keydown` handler in `App/index.html` to ensure it properly ignores events only when focus is on editable fields, and that focus is correctly removed from the numeric input after edition when appropriate.
 - Consider normalizing the “editing finished” moment (on `blur` / `Enter`) to avoid lingering focus that captures spacebar presses.
-
----
-
-### BUG-019: Images Trop Rapprochées dans la Photo Timeline {#bug-019-images-trop-rapprochees-dans-la-photo-timeline}
-
-**Description**:  
-Les images (miniatures) dans la photo timeline sont trop rapprochées les unes des autres, ce qui rend l'affichage difficile à lire et peu esthétique. Il manque un espacement visuel suffisant entre les miniatures pour permettre une meilleure distinction et lisibilité.
-
-**Comportement Actuel**:
-- Les miniatures sont positionnées de manière contiguë sans espacement visible
-- Les bordures entre les images peuvent se chevaucher ou être trop fines
-- L'affichage peut paraître encombré et difficile à parcourir visuellement
-
-**Comportement Attendu**:
-- Un espacement visible (gap) entre chaque miniature pour améliorer la lisibilité
-- Les images restent proportionnelles à leur intervalle de temps
-- L'affichage reste cohérent avec la timeline et la waveform
-- L'espacement ne doit pas compromettre la précision du positionnement temporel
-
-**Acceptance Criteria**:
-- [ ] Ajouter un espacement visuel (gap) entre les miniatures de la photo timeline
-- [ ] L'espacement doit être suffisant pour améliorer la lisibilité sans compromettre la précision
-- [ ] L'espacement doit être cohérent sur toute la longueur de la timeline
-- [ ] L'espacement doit être adaptatif selon la largeur disponible et le nombre d'images
-- [ ] Les clics sur la timeline doivent toujours fonctionner correctement malgré l'espacement
-
-**Technical Considerations**:
-- Modifier `renderPhotoTimeline()` pour ajouter un espacement entre les miniatures
-- L'espacement peut être géré via CSS (`gap`, `margin`, ou `padding`) ou via le calcul de positionnement JavaScript
-- S'assurer que l'espacement n'affecte pas le calcul de position pour les clics (`calculateTargetTimeFromClick`)
-- Considérer un espacement minimal (ex: 1-2px) et un espacement maximal pour éviter de trop étirer l'affichage
-- Tester avec différents nombres d'images et différentes durées d'enregistrement
-
-**Référence**:
-- Capture d'écran du problème datée du jour de la création de ce bug
 
 ---
 
@@ -293,6 +230,122 @@ function stopRecording() {
 
 ---
 
+### BUG-022: Message "Aucun périphérique audio n'a été détecté" S'Affiche Trop Tôt {#bug-022-message-aucun-périphérique-audio-na-été-détecté-saffiche-trop-tôt}
+
+**Description**:  
+Le message "Aucun périphérique audio disponible. Veuillez connecter un périphérique audio." s'affiche dès l'ouverture du fichier `index.html`, alors même que l'application est capable de lire du son par la suite. Ce bug est probablement dû au fait que le test d'accès au périphérique audio se fait trop tôt, avant d'en avoir obtenu l'accès.
+
+**Comportement Actuel**:
+- Le message d'erreur "Aucun périphérique audio disponible" s'affiche immédiatement au chargement de la page
+- L'application fonctionne correctement par la suite et peut lire du son
+- Le message apparaît même lorsqu'un périphérique audio est connecté et fonctionnel
+- L'utilisateur voit une alerte d'erreur inutile qui peut créer de la confusion
+
+**Comportement Attendu**:
+- Le message ne doit s'afficher que si aucun périphérique audio n'est réellement disponible
+- Le test d'accès aux périphériques audio doit se faire après avoir obtenu les permissions nécessaires
+- Si un périphérique audio est disponible, aucun message d'erreur ne doit être affiché
+- Le message ne doit apparaître que si la vérification confirme l'absence de périphériques après avoir obtenu les permissions
+
+**Acceptance Criteria**:
+- [ ] Le message "Aucun périphérique audio disponible" ne s'affiche pas au chargement de la page si un périphérique est disponible
+- [ ] Le test d'accès aux périphériques audio se fait après l'obtention des permissions (via `getUserMedia`)
+- [ ] Le message s'affiche uniquement si aucun périphérique n'est réellement détecté après les permissions
+- [ ] L'application peut lire du son sans afficher de message d'erreur erroné
+- [ ] Le comportement est cohérent entre différents navigateurs
+
+**Technical Considerations**:
+- **Problème identifié** : Le test d'accès aux périphériques audio (`navigator.mediaDevices.enumerateDevices()`) est probablement appelé avant que `getUserMedia()` n'ait été invoqué, ce qui signifie que les permissions n'ont pas encore été accordées
+- **Comportement de l'API** : `enumerateDevices()` peut retourner une liste vide ou des périphériques sans labels si les permissions n'ont pas été accordées au préalable
+- **Solution envisagée** : Décaler le test d'accès aux périphériques audio dans le temps, après l'appel à `getUserMedia()` qui déclenche la demande de permissions
+- **Investigation nécessaire** : Avant de valider cette solution, il convient de comprendre comment s'affiche ce message et donc comprendre ce qui bug exactement
+  - Vérifier l'ordre d'exécution des appels (`AudioOutputMonitor.start()` vs `getUserMedia()`)
+  - Vérifier si `enumerateDevices()` est appelé avant ou après l'obtention des permissions
+  - Comprendre pourquoi `handleNoDevicesAvailable()` est appelé alors qu'un périphérique est disponible
+  - Analyser les logs pour identifier le moment exact où le message apparaît
+
+**Dependencies**:
+- `AudioOutputMonitor` class (TECH-003)
+- `navigator.mediaDevices.enumerateDevices()` API
+- `getUserMedia()` pour l'obtention des permissions
+
+**Recommended Approach**:
+1. **Investigation** : Analyser le code pour comprendre l'ordre d'exécution et identifier pourquoi le message s'affiche trop tôt
+2. **Comprendre le flux** : Tracer l'appel à `AudioOutputMonitor.start()` et `enumerateDevices()` pour voir quand ils sont exécutés par rapport à `getUserMedia()`
+3. **Solution proposée** : Si le problème est confirmé, décaler l'appel à `AudioOutputMonitor.start()` ou `enumerateDevices()` après l'obtention des permissions via `getUserMedia()`
+4. **Alternative** : Ajouter une vérification pour s'assurer que les permissions ont été accordées avant d'afficher le message d'erreur
+5. **Test** : Vérifier que le message ne s'affiche plus au chargement et qu'il apparaît uniquement si aucun périphérique n'est réellement disponible
+
+**Priorité**: Moyenne (affecte l'expérience utilisateur mais n'empêche pas l'utilisation de l'application)
+
+---
+
+### BUG-023: Créer des Logs pour Déboguer l'Impossibilité de Lire la Vidéo Après un Enregistrement Prolongé {#bug-023-créer-des-logs-pour-déboguer-limpossibilité-de-lire-la-vidéo-après-un-enregistrement-prolongé}
+
+**Description**:  
+Créer des logs détaillés pour déboguer un problème où la vidéo ne peut pas être lue après un enregistrement prolongé. Ce problème peut être lié à la gestion de la mémoire, aux chunks vidéo, à la création des blobs, ou à d'autres aspects du système d'enregistrement qui ne se manifestent qu'après une période d'enregistrement prolongée.
+
+**Comportement Observé**:
+- Après un enregistrement prolongé (durée à déterminer), la lecture de la vidéo échoue
+- Le problème ne se manifeste pas lors d'enregistrements courts
+- L'application peut continuer à enregistrer mais ne peut plus lire les flashbacks
+- Aucun message d'erreur clair n'est affiché à l'utilisateur
+
+**Objectif**:
+- Ajouter des logs détaillés pour identifier la cause exacte du problème
+- Les logs doivent couvrir tous les aspects pertinents du système d'enregistrement et de lecture
+- Les logs doivent permettre de comprendre où et pourquoi la lecture échoue
+
+**Acceptance Criteria**:
+- [ ] Logs ajoutés lors de la création des blobs vidéo (taille, type MIME, timestamp)
+- [ ] Logs ajoutés lors de la lecture des flashbacks (état du blob, URL créée, erreurs de lecture)
+- [ ] Logs ajoutés lors de la gestion de la mémoire (taille des buffers, nombre de chunks, sessions)
+- [ ] Logs ajoutés lors des opérations de rolling buffer (trim, cleanup)
+- [ ] Logs ajoutés lors des erreurs de lecture vidéo (erreurs du navigateur, problèmes de blob)
+- [ ] Les logs incluent des timestamps pour tracer la séquence d'événements
+- [ ] Les logs incluent des informations sur l'état de l'application (durée d'enregistrement, nombre de sessions, etc.)
+- [ ] Les logs sont suffisamment détaillés pour identifier la cause racine du problème
+
+**Technical Considerations**:
+- **Points de logging à ajouter**:
+  - Lors de la création des blobs (`URL.createObjectURL()`, taille du blob, type MIME)
+  - Lors de la lecture vidéo (`video.play()`, `video.load()`, erreurs de lecture)
+  - Lors de la gestion des chunks (ajout, suppression, taille)
+  - Lors des opérations de rolling buffer (trim, cleanup, taille avant/après)
+  - Lors de la finalisation des sessions (taille totale, nombre de chunks)
+  - Lors des erreurs de MediaRecorder ou de lecture vidéo
+  
+- **Informations à logger**:
+  - Timestamp de l'événement
+  - Durée totale d'enregistrement au moment de l'événement
+  - Nombre de sessions enregistrées
+  - Taille des buffers (chunkBuffer, currentSessionChunks)
+  - État des blobs (créés, valides, URLs)
+  - Erreurs du navigateur (si disponibles)
+  - État de la vidéo (readyState, networkState, error)
+  
+- **Format des logs**:
+  - Utiliser des préfixes clairs pour identifier le contexte (ex: `[VIDEO_READ]`, `[BLOB_CREATE]`, `[BUFFER_TRIM]`)
+  - Inclure des objets structurés pour faciliter l'analyse
+  - Utiliser `console.log`, `console.warn`, ou `console.error` selon la sévérité
+
+**Dependencies**:
+- Système d'enregistrement existant
+- Système de lecture vidéo (flashback)
+- Gestion des buffers et sessions
+
+**Recommended Approach**:
+1. Identifier les points critiques dans le code où des problèmes peuvent survenir (création de blobs, lecture vidéo, gestion mémoire)
+2. Ajouter des logs avant et après ces opérations critiques
+3. Ajouter des logs lors des erreurs pour capturer les informations de contexte
+4. Tester avec un enregistrement prolongé pour générer les logs
+5. Analyser les logs pour identifier la cause racine du problème
+6. Une fois le problème identifié et corrigé, certains logs peuvent être retirés ou réduits
+
+**Priorité**: Haute (bloque la fonctionnalité principale après un enregistrement prolongé)
+
+---
+
 ### FEAT-001: Menu d'Options avec Mode Miroir {#feat-001-menu-doptions-avec-mode-miroir}
 
 **Description**:  
@@ -353,106 +406,410 @@ Créer un menu d'options accessible depuis l'interface principale permettant de 
 
 ---
 
-### UX-003: Onboarding Tutorial and Contextual Tooltips {#ux-003-onboarding-tutorial-and-contextual-tooltips}
+### FEAT-002: Paramétrage des Sources d'Enregistrement et de Restitution Audio et Vidéo {#feat-002-paramétrage-des-sources-denregistrement-et-de-restitution-audio-et-vidéo}
 
 **Description**:  
-Implement an onboarding tutorial modal and contextual tooltips to help new users quickly understand Flashback Mirror's unique interface and functionality. The application combines continuous recording, unified timeline, exponential navigation (flashback), and marker features in a way that goes beyond traditional video recorders or players, which can be confusing for new users.
+Permettre à l'utilisateur de sélectionner et configurer les sources d'enregistrement (caméra, micro) et de restitution (haut-parleurs, écouteurs) audio et vidéo. Cette fonctionnalité permet de choisir parmi les périphériques disponibles et de personnaliser l'expérience d'enregistrement et de lecture selon les préférences et l'équipement de l'utilisateur.
 
 **User Value**:
-- **Quick understanding** : New users can grasp the core concepts and use cases in 1-2 minutes
-- **Reduced learning curve** : Contextual help guides users through their first interactions
-- **Better adoption** : Users are more likely to use advanced features if they understand them quickly
-- **Professional experience** : Onboarding demonstrates attention to user experience
+- **Flexibilité** : Choix du périphérique d'enregistrement (caméra avant/arrière, micro intégré/externe)
+- **Qualité** : Sélection du meilleur périphérique disponible pour optimiser la qualité d'enregistrement
+- **Confort** : Choix du périphérique de restitution audio (haut-parleurs, écouteurs, Bluetooth)
+- **Personnalisation** : Adaptation de l'application à différents contextes d'utilisation (sport, danse, éloquence)
+- **Persistance** : Sauvegarde des préférences pour les sessions futures
+
+**Comportement Actuel**:
+- L'application utilise les périphériques par défaut du système
+- Aucune possibilité de choisir une caméra spécifique (avant/arrière)
+- Aucune possibilité de choisir un micro spécifique
+- La restitution audio utilise le périphérique par défaut (avec basculement automatique en cas de déconnexion via TECH-003)
+
+**Comportement Attendu**:
+- Un menu de sélection des périphériques est accessible depuis le menu d'options (FEAT-001)
+- L'utilisateur peut choisir parmi les caméras disponibles (avant, arrière, externes)
+- L'utilisateur peut choisir parmi les micros disponibles (intégré, externe, Bluetooth)
+- L'utilisateur peut choisir parmi les périphériques de sortie audio disponibles
+- Les sélections sont sauvegardées et restaurées au chargement
+- Les changements de périphériques sont appliqués immédiatement ou au prochain enregistrement
 
 **Acceptance Criteria**:
-
-**Onboarding Tutorial Modal**:
-- [ ] A modal appears on first launch (detected via localStorage)
-- [ ] The modal displays 4 short steps:
-  1. "Welcome! Flashback Mirror records continuously to help you easily review yourself and improve (sports, dance, performing arts, public speaking...)."
-  2. "Use ← to go back in time, → to go forward."
-  3. "Click on the timeline to review a specific moment."
-  4. "Recording has started automatically. Happy training!"
-- [ ] The modal includes a checkbox or button "Never show tutorial again" for persistence
-- [ ] The modal can be closed via a button or clicking outside
-- [ ] The preference is saved in localStorage and respected on subsequent visits
-
-**Contextual Tooltips**:
-- [ ] **Timeline hover**: Tooltip displays "Click to jump to a specific moment."
-- [ ] **←/→ buttons hover**: Tooltip displays "Go back/forward in time (repeated presses increase the distance)."
-- [ ] **Mark button hover**: Tooltip displays "Click on Mark to create a marker. Navigate to previous/next marker with the Up and Down buttons."
-- [ ] **Marker Up/Down buttons hover**: Tooltip displays "Navigate to previous/next marker."
-- [ ] Tooltips appear on hover and disappear when the cursor leaves
-- [ ] Tooltips are positioned appropriately and don't obstruct the interface
-
-**Contextual Overlays**:
-- [ ] **First flashback**: When user enters flashback mode for the first time, display an overlay: "You are in flashback mode. Use Esc to record again."
-- [ ] The overlay appears temporarily (e.g., 5 seconds) or can be dismissed
-- [ ] The overlay doesn't appear again after the first flashback (saved in localStorage)
+- [ ] Un menu de sélection des périphériques est accessible depuis le menu d'options
+- [ ] Liste des caméras disponibles avec leurs labels (ex: "FaceTime HD Camera", "USB Camera")
+- [ ] Liste des micros disponibles avec leurs labels (ex: "Built-in Microphone", "USB Microphone")
+- [ ] Liste des périphériques de sortie audio disponibles avec leurs labels
+- [ ] Sélection d'une caméra appliquée lors du prochain enregistrement
+- [ ] Sélection d'un micro appliquée lors du prochain enregistrement
+- [ ] Sélection d'un périphérique de sortie audio appliquée immédiatement pour les flashbacks
+- [ ] Les préférences sont sauvegardées dans localStorage et restaurées au chargement
+- [ ] Détection automatique des nouveaux périphériques connectés
+- [ ] Gestion des périphériques déconnectés (retour au défaut ou notification)
 
 **Technical Considerations**:
-- **Onboarding Modal**:
-  - Check `localStorage.getItem('flashbackOnboardingShown')` on page load
-  - Create a modal component with CSS styling (centered, semi-transparent background)
-  - Use CSS animations for smooth appearance/disappearance
-  - Save preference in localStorage when "Never show again" is checked
+- **API MediaDevices**:
+  - Utiliser `navigator.mediaDevices.enumerateDevices()` pour lister les périphériques
+  - Utiliser `getUserMedia({ video: { deviceId: {...} }, audio: { deviceId: {...} } })` pour sélectionner les périphériques
+  - Utiliser `setSinkId()` pour la sélection de la sortie audio (déjà partiellement implémenté)
   
-- **Tooltips**:
-  - Use CSS `::before` or `::after` pseudo-elements, or create tooltip divs dynamically
-  - Position tooltips relative to the hovered element (above, below, or to the side)
-  - Use JavaScript event listeners (`mouseenter`, `mouseleave`) to show/hide tooltips
-  - Ensure tooltips don't overflow viewport boundaries
-  - Consider using a tooltip library (e.g., Tippy.js) for advanced positioning and animations
+- **Interface utilisateur**:
+  - Ajouter des sélecteurs (dropdowns) dans le menu d'options (FEAT-001)
+  - Afficher les labels des périphériques (nécessite les permissions)
+  - Gérer les cas où aucun périphérique n'est disponible
+  - Afficher l'état actuel (périphérique sélectionné)
   
-- **Contextual Overlays**:
-  - Track first flashback entry via localStorage (`flashbackFirstTime`)
-  - Display overlay when entering flashback mode for the first time
-  - Use CSS for positioning and styling (similar to existing overlays like time offset overlay)
-  - Auto-dismiss after timeout or allow manual dismissal
+- **Gestion des permissions**:
+  - S'assurer que les permissions sont accordées avant d'afficher les labels
+  - Gérer les cas où les permissions sont refusées
   
-- **Performance**:
-  - Ensure tooltips don't cause performance issues with frequent hover events
-  - Lazy-load tooltip content if needed
-  - Minimize DOM manipulation for tooltip creation/destruction
+- **Persistance**:
+  - Sauvegarder les `deviceId` sélectionnés dans localStorage
+  - Restaurer les sélections au chargement
+  - Gérer les cas où un périphérique sauvegardé n'est plus disponible
+  
+- **Intégration**:
+  - Modifier `startRecording()` pour utiliser les périphériques sélectionnés
+  - Modifier `setAudioOutputDevice()` pour utiliser la sélection sauvegardée
+  - Intégrer avec `AudioOutputMonitor` (TECH-003) pour la détection des changements
 
 **Dependencies**:
-- Interface utilisateur existante
+- FEAT-001 (Menu d'Options) pour l'interface de sélection
+- TECH-003 (AudioOutputMonitor) pour la détection des périphériques audio
+- API MediaDevices du navigateur
 - Système de localStorage pour la persistance
-- CSS pour les styles et animations
-- JavaScript pour la gestion des événements et états
 
 **Recommended Approach**:
-1. Implement the onboarding modal first (simpler, high impact)
-2. Add tooltips to key interactive elements (timeline, navigation buttons, markers)
-3. Add contextual overlay for first flashback
-4. Test with new users to validate effectiveness
-5. Iterate based on feedback
+1. Créer une section "Périphériques" dans le menu d'options (FEAT-001)
+2. Implémenter la fonction de liste des périphériques disponibles (caméras, micros, sorties audio)
+3. Créer des sélecteurs (dropdowns) pour chaque type de périphérique
+4. Sauvegarder les sélections dans localStorage
+5. Modifier `startRecording()` pour utiliser les périphériques sélectionnés
+6. Modifier la gestion de la sortie audio pour utiliser la sélection sauvegardée
+7. Gérer les cas où un périphérique sauvegardé n'est plus disponible
+8. Tester avec différents périphériques et scénarios de connexion/déconnexion
 
-**Implementation Details**:
+**Priorité**: Moyenne-Haute (améliore significativement la flexibilité et l'expérience utilisateur)
 
-**Onboarding Modal Structure**:
-```javascript
-// Check on page load
-if (!localStorage.getItem('flashbackOnboardingShown')) {
-    showOnboardingModal();
-}
+---
 
-function showOnboardingModal() {
-    // Create modal with 4 steps
-    // Add checkbox "Never show again"
-    // Save preference on close
-}
-```
+### FEAT-003: Marquage Automatique de Moments Importants {#feat-003-marquage-automatique-de-moments-importants}
 
-**Tooltip Implementation**:
-```javascript
-// Add data-tooltip attributes to elements
-// Or use event listeners on hover
-element.addEventListener('mouseenter', showTooltip);
-element.addEventListener('mouseleave', hideTooltip);
-```
+**Description**:  
+Implémenter un système de marquage automatique de moments importants pendant l'enregistrement. Le système détecte automatiquement des événements significatifs (par exemple, mouvements brusques, changements de volume audio, détection de voix, etc.) et crée des marqueurs à ces moments pour faciliter la navigation et la révision ultérieure.
 
-**Priority**: High (significantly improves user onboarding and reduces confusion)
+**User Value**:
+- **Efficacité** : Identification automatique des moments clés sans intervention manuelle
+- **Navigation** : Accès rapide aux moments importants via les marqueurs automatiques
+- **Révision** : Focus sur les moments pertinents plutôt que de parcourir tout l'enregistrement
+- **Apprentissage** : Identification des patterns et moments récurrents dans les performances
+- **Gain de temps** : Réduction du temps nécessaire pour trouver les moments à revoir
+
+**Comportement Actuel**:
+- Les marqueurs doivent être créés manuellement par l'utilisateur via le bouton "Mark"
+- Aucune détection automatique d'événements significatifs
+- L'utilisateur doit naviguer manuellement pour trouver les moments importants
+
+**Comportement Attendu**:
+- Le système détecte automatiquement certains types d'événements pendant l'enregistrement
+- Des marqueurs sont créés automatiquement aux moments détectés
+- Les marqueurs automatiques sont visuellement distincts des marqueurs manuels (optionnel)
+- L'utilisateur peut activer/désactiver le marquage automatique
+- L'utilisateur peut configurer les types d'événements à détecter (si applicable)
+- Les marqueurs automatiques peuvent être supprimés comme les marqueurs manuels
+
+**Acceptance Criteria**:
+- [ ] Le système détecte automatiquement au moins un type d'événement (ex: changements de volume audio significatifs)
+- [ ] Des marqueurs sont créés automatiquement aux moments détectés
+- [ ] Les marqueurs automatiques sont visibles sur la timeline
+- [ ] L'utilisateur peut activer/désactiver le marquage automatique (toggle dans les options)
+- [ ] L'utilisateur peut naviguer vers les marqueurs automatiques comme les marqueurs manuels
+- [ ] Les marqueurs automatiques peuvent être supprimés
+- [ ] Le système ne crée pas trop de marqueurs (éviter le spam)
+- [ ] La détection fonctionne en temps réel pendant l'enregistrement
+
+**Technical Considerations**:
+- **Types d'événements à détecter** (exemples) :
+  - Changements de volume audio significatifs (augmentation soudaine, silence)
+  - Détection de voix (parole vs silence)
+  - Mouvements brusques dans la vidéo (détection de mouvement via analyse d'image)
+  - Changements de luminosité (ex: flash, changement de scène)
+  - Patterns audio spécifiques (ex: applaudissements, cris)
+  
+- **Analyse en temps réel**:
+  - Utiliser l'API Web Audio pour analyser le signal audio
+  - Utiliser `AudioContext` et `AnalyserNode` pour calculer le volume, la fréquence, etc.
+  - Analyser les frames vidéo pour détecter les mouvements (optionnel, plus complexe)
+  - Implémenter des seuils et des algorithmes de détection pour éviter les faux positifs
+  
+- **Performance**:
+  - L'analyse doit être légère pour ne pas impacter l'enregistrement
+  - Utiliser des techniques d'échantillonnage si nécessaire
+  - Éviter de créer trop de marqueurs (débounce, seuils minimaux)
+  
+- **Interface utilisateur**:
+  - Ajouter un toggle dans le menu d'options pour activer/désactiver
+  - Optionnel : Distinguer visuellement les marqueurs automatiques (couleur différente, icône)
+  - Afficher le nombre de marqueurs automatiques créés
+  
+- **Configuration**:
+  - Permettre à l'utilisateur de configurer la sensibilité de détection
+  - Permettre de choisir les types d'événements à détecter (si plusieurs types sont implémentés)
+  - Sauvegarder les préférences dans localStorage
+
+**Dependencies**:
+- FEAT-001 (Menu d'Options) pour le toggle et la configuration
+- Système de marqueurs existant (bouton "Mark")
+- API Web Audio pour l'analyse audio
+- Système d'enregistrement pour accéder aux données en temps réel
+
+**Recommended Approach**:
+1. **Phase 1 - Détection audio simple** :
+   - Implémenter l'analyse du volume audio en temps réel
+   - Détecter les changements significatifs de volume
+   - Créer des marqueurs automatiques aux moments détectés
+   - Ajouter un toggle pour activer/désactiver
+   
+2. **Phase 2 - Amélioration** :
+   - Affiner les algorithmes de détection (seuils, débounce)
+   - Ajouter d'autres types de détection si nécessaire
+   - Permettre la configuration de la sensibilité
+   - Distinguer visuellement les marqueurs automatiques
+   
+3. **Phase 3 - Avancé (optionnel)** :
+   - Détection de mouvement dans la vidéo
+   - Détection de patterns audio spécifiques
+   - Machine learning pour améliorer la détection (futur)
+
+**Priorité**: Moyenne (améliore l'expérience utilisateur mais n'est pas essentiel)
+
+---
+
+### FEAT-004: Paramétrage de la Vitesse de Replay {#feat-004-paramétrage-de-la-vitesse-de-replay}
+
+**Description**:  
+Permettre à l'utilisateur de contrôler la vitesse de lecture des flashbacks. Cette fonctionnalité permet d'accélérer ou de ralentir la lecture vidéo et audio pour faciliter la révision, l'analyse détaillée, ou le passage rapide de certaines sections.
+
+**User Value**:
+- **Efficacité** : Accélération de la lecture pour passer rapidement les sections moins intéressantes
+- **Analyse** : Ralentissement de la lecture pour analyser en détail les mouvements et techniques
+- **Flexibilité** : Adaptation de la vitesse selon le contexte (sport, danse, éloquence)
+- **Gain de temps** : Révision plus rapide des enregistrements longs
+- **Apprentissage** : Analyse au ralenti pour comprendre les détails techniques
+
+**Comportement Actuel**:
+- La lecture des flashbacks se fait à vitesse normale (1x)
+- Aucune possibilité de modifier la vitesse de lecture
+- L'utilisateur doit attendre la fin de la lecture pour revoir une section
+
+**Comportement Attendu**:
+- L'utilisateur peut sélectionner différentes vitesses de lecture (ex: 0.25x, 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x)
+- La vitesse s'applique à la fois à la vidéo et à l'audio
+- La vitesse peut être modifiée pendant la lecture
+- La vitesse sélectionnée est sauvegardée et restaurée pour les prochaines sessions
+- Un indicateur visuel montre la vitesse actuelle
+
+**Acceptance Criteria**:
+- [ ] Un contrôle de vitesse est accessible pendant la lecture d'un flashback
+- [ ] Plusieurs vitesses sont disponibles (ralenti, normal, accéléré)
+- [ ] La vitesse s'applique à la fois à la vidéo et à l'audio
+- [ ] La vitesse peut être modifiée pendant la lecture sans interruption
+- [ ] La vitesse sélectionnée est sauvegardée dans localStorage
+- [ ] La vitesse est restaurée au chargement de l'application
+- [ ] Un indicateur visuel (ex: "2x", "0.5x") montre la vitesse actuelle
+- [ ] L'interface reste intuitive et facile à utiliser
+
+**Technical Considerations**:
+- **API HTML5 Video**:
+  - Utiliser la propriété `playbackRate` de l'élément `<video>` pour contrôler la vitesse
+  - Les valeurs typiques sont : 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0
+  - Certains navigateurs supportent des valeurs plus extrêmes (ex: 0.1 à 16)
+  - La propriété `playbackRate` affecte automatiquement la vidéo et l'audio
+  
+- **Interface utilisateur**:
+  - Ajouter un contrôle dans l'interface de lecture (boutons, slider, ou menu déroulant)
+  - Options possibles :
+    - Boutons avec icônes (ralenti, normal, accéléré)
+    - Slider pour sélection continue
+    - Menu déroulant avec valeurs prédéfinies
+  - Afficher la vitesse actuelle de manière visible
+  - Positionner le contrôle de manière accessible mais non intrusive
+  
+- **Intégration**:
+  - Le contrôle doit être visible uniquement pendant la lecture d'un flashback
+  - Appliquer la vitesse lors du démarrage de la lecture
+  - Permettre le changement de vitesse pendant la lecture
+  - Réinitialiser à la vitesse normale (1x) ou sauvegardée lors du démarrage d'un nouveau flashback
+  
+- **Persistance**:
+  - Sauvegarder la vitesse sélectionnée dans localStorage
+  - Restaurer la vitesse au chargement de l'application
+  - Optionnel : Permettre une vitesse par défaut différente de 1x
+  
+- **Limitations**:
+  - Certains navigateurs peuvent avoir des limitations sur les vitesses extrêmes
+  - L'audio peut devenir déformé à des vitesses très élevées ou très basses
+  - Tester la compatibilité avec différents navigateurs
+
+**Dependencies**:
+- Système de lecture vidéo (flashback) existant
+- Élément `<video>` pour la propriété `playbackRate`
+- Système de localStorage pour la persistance
+- Interface utilisateur pour le contrôle
+
+**Recommended Approach**:
+1. **Phase 1 - Contrôle basique** :
+   - Ajouter des boutons pour les vitesses courantes (0.5x, 1x, 1.5x, 2x)
+   - Implémenter la modification de `playbackRate` sur l'élément vidéo
+   - Afficher un indicateur de vitesse
+   - Tester avec différents navigateurs
+   
+2. **Phase 2 - Amélioration** :
+   - Ajouter plus d'options de vitesse (0.25x, 0.75x, 1.25x, etc.)
+   - Sauvegarder la préférence dans localStorage
+   - Ajouter un slider pour sélection continue (optionnel)
+   - Améliorer l'indicateur visuel
+   
+3. **Phase 3 - Intégration** :
+   - Intégrer le contrôle dans le menu d'options (FEAT-001) si souhaité
+   - Permettre la configuration de la vitesse par défaut
+   - Ajouter des raccourcis clavier pour changer la vitesse (optionnel)
+
+**Priorité**: Moyenne (améliore l'expérience utilisateur mais n'est pas essentiel)
+
+---
+
+### MARKETING-001: Créer un Logo pour Flashback Mirror {#marketing-001-créer-un-logo-pour-flashback-mirror}
+
+**Description**:  
+Créer un logo professionnel pour Flashback Mirror qui représente l'identité visuelle de l'application. Le logo sera utilisé pour la promotion, le branding, et l'affichage dans l'application elle-même.
+
+**User Value**:
+- **Identité visuelle** : Créer une identité de marque reconnaissable
+- **Professionnalisme** : Améliorer la crédibilité et l'image de l'application
+- **Reconnaissance** : Faciliter la mémorisation et l'identification de l'application
+- **Marketing** : Utiliser le logo pour la promotion sur LinkedIn et autres canaux
+
+**Comportement Actuel**:
+- Aucun logo n'existe pour l'application
+- L'application utilise uniquement le titre texte "Flashback Mirror"
+
+**Comportement Attendu**:
+- Un logo professionnel est créé pour Flashback Mirror
+- Le logo peut être utilisé dans l'application (favicon, en-tête)
+- Le logo peut être utilisé pour la promotion (LinkedIn, réseaux sociaux)
+- Le logo est disponible dans différents formats (PNG, SVG, différentes tailles)
+
+**Acceptance Criteria**:
+- [ ] Un logo est créé pour Flashback Mirror
+- [ ] Le logo représente visuellement le concept de "flashback" ou de "miroir temporel"
+- [ ] Le logo est professionnel et adapté à un contexte B2C (entraînement, performance)
+- [ ] Le logo est disponible en format SVG (vectoriel) pour la qualité
+- [ ] Le logo est disponible en format PNG avec fond transparent
+- [ ] Le logo est disponible en différentes tailles (favicon 16x16, icône 64x64, logo complet)
+- [ ] Le logo peut être utilisé dans l'application (favicon, en-tête si souhaité)
+- [ ] Le logo peut être utilisé pour la promotion sur LinkedIn
+
+**Technical Considerations**:
+- **Design**:
+  - Concept visuel : Représenter l'idée de "flashback" (retour en arrière temporel) et "miroir" (réflexion, auto-évaluation)
+  - Style : Moderne, épuré, adapté à un contexte sportif/performance
+  - Couleurs : À définir selon l'identité visuelle souhaitée
+  - Typographie : Intégrer ou compléter le texte "Flashback Mirror" si nécessaire
+  
+- **Formats**:
+  - SVG pour la qualité vectorielle et la scalabilité
+  - PNG avec fond transparent pour les usages web
+  - Favicon (16x16, 32x32) pour l'onglet du navigateur
+  - Tailles multiples pour différents contextes d'utilisation
+  
+- **Outils**:
+  - Design tools : Figma, Adobe Illustrator, Canva, ou autres outils de design
+  - Optionnel : Faire appel à un designer professionnel ou utiliser des outils en ligne
+
+**Dependencies**:
+- Définition de l'identité visuelle souhaitée
+- Outils de design (ou designer)
+
+**Recommended Approach**:
+1. Définir le concept visuel et les éléments clés à représenter (flashback, miroir, temps)
+2. Créer des esquisses ou maquettes du logo
+3. Choisir les couleurs et la typographie
+4. Créer le logo final dans un outil de design
+5. Exporter dans les différents formats nécessaires (SVG, PNG, favicon)
+6. Intégrer le logo dans l'application (favicon, optionnellement en-tête)
+7. Utiliser le logo pour la promotion
+
+**Priorité**: Moyenne (améliore le branding mais n'est pas bloquant pour le fonctionnement)
+
+---
+
+### MARKETING-002: Diffuser l'Application sur le Profil LinkedIn {#marketing-002-diffuser-lapplication-sur-le-profil-linkedin}
+
+**Description**:  
+Créer et publier un post sur LinkedIn pour présenter Flashback Mirror, partager le lien vers l'application, et promouvoir le projet sur le réseau professionnel. Cette action vise à faire connaître l'application, obtenir des retours, et démontrer les compétences en product management.
+
+**User Value**:
+- **Visibilité** : Faire connaître Flashback Mirror à un réseau professionnel
+- **Feedback** : Obtenir des retours d'utilisateurs et de pairs
+- **Networking** : Créer des opportunités de connexion et de collaboration
+- **Portfolio** : Démontrer les compétences en product management et développement de produits
+- **Validation** : Tester l'intérêt du marché pour le concept
+
+**Comportement Actuel**:
+- L'application n'est pas promue sur LinkedIn
+- Le projet n'est pas visible sur le réseau professionnel
+
+**Comportement Attendu**:
+- Un post LinkedIn est créé et publié
+- Le post présente Flashback Mirror de manière engageante
+- Le post inclut le lien vers l'application (GitHub Pages)
+- Le post inclut des visuels (captures d'écran, logo si disponible)
+- Le post génère de l'engagement (likes, commentaires, partages)
+
+**Acceptance Criteria**:
+- [ ] Un post LinkedIn est rédigé pour présenter Flashback Mirror
+- [ ] Le post explique clairement le concept et la valeur de l'application
+- [ ] Le post inclut le lien vers l'application (https://samuelpilot86.github.io/flashbackmirror/)
+- [ ] Le post inclut des visuels (captures d'écran, logo si disponible)
+- [ ] Le post est publié sur le profil LinkedIn
+- [ ] Le post utilise un ton professionnel mais accessible
+- [ ] Le post invite à l'essai et aux retours
+
+**Technical Considerations**:
+- **Contenu du post**:
+  - Titre accrocheur
+  - Description du problème résolu
+  - Présentation de la solution unique (enregistrement continu + navigation temporelle)
+  - Cas d'usage (sport, danse, éloquence)
+  - Lien vers l'application
+  - Call-to-action (essayer, donner des retours)
+  
+- **Visuels**:
+  - Captures d'écran de l'application en action
+  - Logo (si MARKETING-001 est complété)
+  - Peut-être une courte vidéo GIF ou vidéo de démonstration
+  
+- **Timing**:
+  - Publier à un moment où l'audience est active
+  - Considérer les fuseaux horaires de l'audience cible
+  
+- **Hashtags**:
+  - Utiliser des hashtags pertinents (#ProductManagement, #MVP, #WebApp, #Innovation, etc.)
+
+**Dependencies**:
+- MARKETING-001 (Logo) - Optionnel mais recommandé pour avoir un logo à inclure
+- Application fonctionnelle et accessible en ligne
+- Captures d'écran de l'application
+
+**Recommended Approach**:
+1. Préparer le contenu du post (texte, visuels)
+2. Créer des captures d'écran de l'application en action
+3. Intégrer le logo si disponible (MARKETING-001)
+4. Rédiger le post LinkedIn avec un ton professionnel et engageant
+5. Ajouter des hashtags pertinents
+6. Publier le post sur LinkedIn
+7. Répondre aux commentaires et interactions
+8. Suivre l'engagement et les retours
+
+**Priorité**: Moyenne-Haute (important pour la visibilité et la validation du concept)
 
 ---
 
