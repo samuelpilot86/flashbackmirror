@@ -1,42 +1,36 @@
 # Flashback Mirror — contexte pour l’agent
 
-## Produit
+## Référence rapide (projet)
 
-Application web **Flashback** (enregistreur / buffer / flashback d’entraînement), statique, sans bundler.
+| Élément | Détail |
+|--------|--------|
+| Produit | **Flashback** — app web d’enregistrement / buffer / flashback d’entraînement, **statique**, sans bundler |
+| Code servi en prod | `docs/index.html`, `docs/script.js`, `docs/styles.css` |
+| Doc produit | `Description docs/backlog.md`, `Description docs/requirements-user-stories.md` (quoter le chemin en shell : espace dans le nom du dossier) |
+| Déploiement | GitHub Pages : branche **`main`**, dossier **`/docs`** |
+| URL publique | https://samuelpilot86.github.io/flashbackmirror/ |
+| Mise à jour du site | `git commit` + `git push` des changements sous `docs/` (délai côté GitHub) |
+| Source de code | Travailler **directement dans `docs/`** — le dossier `App/` n’existe pas dans ce dépôt |
+| Assets | `Logo/` à la racine ; référencer depuis `docs/` en chemins relatifs si besoin |
+| Test local | Servir `docs/` en HTTP (ex. `npx --yes serve docs` depuis la racine), pas seulement `file://` (caméra / APIs) |
 
-## Où est le code applicatif
+## Git — fichiers à ne pas versionner
 
-- **Source déployée** : dossier `docs/` à la racine du dépôt.
-- Fichiers principaux : `docs/index.html`, `docs/script.js`, `docs/styles.css`.
-- Le dossier `App/` mentionné dans une ancienne version du README **n’existe pas** dans ce dépôt : travailler **directement** dans `docs/`.
+Ces motifs sont dans **`.gitignore`** : ne pas les ajouter au dépôt ni proposer de les commiter.
 
-## Documentation produit / suivi
+- `docs/index *.html` — copies locales de secours de l’index (le fichier **`docs/index.html`** sans espace après `index` reste versionné).
+- `docs/old/` — archives HTML locales.
 
-- `Description docs/backlog.md`
-- `Description docs/requirements-user-stories.md`
+Ne retirer ces règles du `.gitignore` qu’avec accord explicite du mainteneur.
 
-(Le nom du dossier contient un espace : bien quoter les chemins en shell.)
+## Conventions de travail (équipe / utilisateur)
 
-## Déploiement
-
-- **GitHub Pages** : branche `main`, dossier `/docs`.
-- URL publique : https://samuelpilot86.github.io/flashbackmirror/
-- Mise à jour du site : commit + `git push` des changements sous `docs/` (délai de quelques minutes côté GitHub).
-
-## Assets
-
-- Dossier `Logo/` à la racine (images / SVG) — à utiliser ou référencer depuis `docs/` si besoin (chemins relatifs).
-
-## Fichiers volontairement hors dépôt
-
-Des copies locales de secours du HTML (`docs/index … .html`) et `docs/old/` sont listés dans `.gitignore` : ne pas les ajouter au dépôt.
-
-## Conventions
-
-- Changements **ciblés** : éviter les refactors ou fichiers non demandés.
-- Préserver le style et les patterns existants dans `script.js` / `styles.css`.
-- Langue : **français** pour les messages à l’utilisateur (issues, réponses, messages de commit si l’utilisateur le demande).
-
-## Test local
-
-Servir le dossier `docs/` avec un serveur HTTP statique (ex. `npx --yes serve docs` depuis la racine) pour éviter les limitations `file://` sur la caméra / certains modules.
+- **Exécution** : environnement réel — lancer les commandes et vérifications soi-même quand c’est possible, plutôt que de se limiter à des instructions à copier-coller.
+- **Résilience** : en cas d’échec, diagnostiquer, varier l’approche et réessayer plutôt qu’abandonner après une seule tentative.
+- **Langue** : répondre à l’utilisateur en **français** ; style clair, phrases complètes (plutôt qu’une suite de fragments télégraphiques).
+- **Périmètre** : modifier uniquement ce qui sert à la demande ; pas de refactors ni de fichiers hors sujet ; **ne pas** ajouter de fichiers Markdown de documentation non demandés.
+- **Code** : lire le contexte autour des changements ; rester aligné sur le style, les abstractions et le niveau de commentaires existants ; ne pas supprimer du code ou des commentaires utiles hors du périmètre.
+- **UI** : viser un rendu cohérent avec `styles.css` et l’existant (espacements, typo, couleurs).
+- **Git** : messages de commit en phrases complètes, grammaire soignée, détail utile seulement (quand l’utilisateur demande un commit).
+- **Conversation** : interpréter la demande dans le **fil** de la discussion (objectif implicite, raffinements), pas uniquement le dernier message isolé.
+- **Citations** : pour parler du code déjà dans le dépôt, citer fichier et lignes quand c’est utile à la compréhension.
