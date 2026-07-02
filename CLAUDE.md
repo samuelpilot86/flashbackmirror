@@ -31,6 +31,6 @@ Ne retirer ces règles du `.gitignore` qu’avec accord explicite du mainteneur.
 - **Périmètre** : modifier uniquement ce qui sert à la demande ; pas de refactors ni de fichiers hors sujet ; **ne pas** ajouter de fichiers Markdown de documentation non demandés.
 - **Code** : lire le contexte autour des changements ; rester aligné sur le style, les abstractions et le niveau de commentaires existants ; ne pas supprimer du code ou des commentaires utiles hors du périmètre.
 - **UI** : viser un rendu cohérent avec `styles.css` et l’existant (espacements, typo, couleurs).
-- **Git** : messages de commit en phrases complètes, grammaire soignée, détail utile seulement (quand l’utilisateur demande un commit).
+- **Git** : **Ne jamais créer de commit sans que l’utilisateur le demande explicitement.** La version en ligne (GitHub Pages) doit rester stable. Messages de commit en phrases complètes, grammaire soignée, détail utile seulement.
 - **Conversation** : interpréter la demande dans le **fil** de la discussion (objectif implicite, raffinements), pas uniquement le dernier message isolé.
 - **Citations** : pour parler du code déjà dans le dépôt, citer fichier et lignes quand c’est utile à la compréhension.

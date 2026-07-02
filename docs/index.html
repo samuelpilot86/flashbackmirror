@@ -70,15 +70,6 @@
                 <button class="btn btn-secondary" id="nextMarkerBtn" disabled>Marker ↓</button>
             </div>
 
-            <!-- Settings Panel -->
-            <div class="settings-panel">
-                <div class="duration-control">
-                    <label for="durationRange">Max Duration:</label>
-                    <input type="range" id="durationRange" min="1" max="3600" value="600">
-                    <input type="number" id="durationValue" min="1" max="3600" value="600">
-                    <span id="durationDisplay">600s</span>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -122,6 +113,57 @@
                         <span class="debug-label">Tampon:</span>
                         <span class="debug-value" id="debugBufferDuration">0.0s</span>
                     </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Config Panel Toggle -->
+    <button class="config-panel-toggle" id="configPanelToggle" aria-label="Ouvrir la configuration">⚙</button>
+
+    <!-- Config Panel -->
+    <div class="config-panel" id="configPanel">
+        <div class="config-panel-header">
+            <h3>Configuration</h3>
+            <button class="config-panel-close" id="configPanelClose" aria-label="Fermer">✕</button>
+        </div>
+        <div class="config-panel-body">
+            <!-- Périphériques -->
+            <div class="config-section">
+                <div class="config-section-title">Périphériques</div>
+                <div class="config-field">
+                    <label class="config-label">Microphone</label>
+                    <select id="configMicSelect" class="config-select"></select>
+                    <canvas id="configVuMeter" class="config-vumeter" width="240" height="10"></canvas>
+                </div>
+                <div class="config-field">
+                    <label class="config-label">Caméra</label>
+                    <select id="configCameraSelect" class="config-select"></select>
+                    <video id="configCameraPreview" class="config-camera-preview" autoplay muted playsinline></video>
+                </div>
+                <div class="config-field">
+                    <label class="config-label">Sortie audio</label>
+                    <div id="configAudioOutputContent"></div>
+                </div>
+            </div>
+            <!-- Enregistrement -->
+            <div class="config-section">
+                <div class="config-section-title">Enregistrement</div>
+                <div class="config-field">
+                    <label class="config-label">Durée maximale d'enregistrement</label>
+                    <div class="duration-control">
+                        <input type="range" id="durationRange" min="1" max="3600" value="600">
+                        <input type="number" id="durationValue" min="1" max="3600" value="600">
+                        <span id="durationDisplay">600s</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Affichage -->
+            <div class="config-section">
+                <div class="config-section-title">Affichage</div>
+                <div class="config-field config-field--row">
+                    <label class="config-label" for="configMirrorToggle">Mode miroir</label>
+                    <input type="checkbox" id="configMirrorToggle" class="config-toggle">
+                </div>
             </div>
         </div>
     </div>

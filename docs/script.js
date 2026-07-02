@@ -1,3 +1,6 @@
+// Set to true to show the debug (Buffer Analysis) panel
+const SHOW_DEBUG_PANEL = false;
+
 /**
  * AudioKeepAlive - Prevents audio devices from going to sleep
  * Uses two approaches in parallel:
@@ -16,66 +19,90 @@ class AudioKeepAlive {
         this.checkInterval = null; // State check interval
         this.isActive = false;
         // Approach 1 settings
-        this.intervalDuration = 10000; // 10 seconds (test value)
-        this.signalDuration = 1000; // 1 second (test value)
-        this.frequency = 20; // 20 Hz (inaudible)
-        this.gain = 0.01; // Slightly higher for testing
+        this.intervalDuration = 10000; // 10 seconds
+        this.signalDuration = 1000; // 1 second
+        this.frequency = 100; // 100 Hz (audible, debug)
+        this.gain = 0.5; // Audible amplitude (debug)
         // Approach 2 settings
         this.checkIntervalDuration = 5000; // 5 seconds
+        // Output routing: MediaStream → <audio> element with setSinkId
+        this.streamDestination = null;
+        this.audioEl = null;
     }
 
-    start() {
+    start(outputDeviceId = 'default') {
         if (this.isActive) {
             return;
         }
-        
+
         try {
             // Create AudioContext
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            
+
             // Resume context if suspended (required by some browsers)
             if (this.audioContext.state === 'suspended') {
                 this.audioContext.resume().catch(err => {
                     console.warn('AudioKeepAlive: Failed to resume audio context', err);
                 });
             }
-            
+
+            // Route output via MediaStream → <audio> element so setSinkId can target the
+            // correct device (AudioContext.destination always follows the OS default, not the
+            // device selected via setSinkId on the flashback <video>).
+            this.streamDestination = this.audioContext.createMediaStreamDestination();
+            this.audioEl = new Audio();
+            this.audioEl.srcObject = this.streamDestination.stream;
+            this.audioEl.play().catch(() => {});
+            if (typeof this.audioEl.setSinkId === 'function') {
+                const sinkId = (outputDeviceId === 'default') ? '' : outputDeviceId;
+                this.audioEl.setSinkId(sinkId).catch(err => {
+                    console.warn('AudioKeepAlive: setSinkId failed', err);
+                });
+            }
+
             // APPROACH 1: Create periodic keep-alive signal
             this.keepAliveInterval = setInterval(() => {
                 this.playKeepAliveSignal();
             }, this.intervalDuration);
-            
+
             // Play initial signal immediately
             this.playKeepAliveSignal();
-            
+
             // APPROACH 2: Create silent GainNode permanently connected
             this.silentGainNode = this.audioContext.createGain();
             this.silentGainNode.gain.value = 0; // Completely silent
-            this.silentGainNode.connect(this.audioContext.destination);
-            
+            this.silentGainNode.connect(this.streamDestination);
+
             // APPROACH 2: Start periodic state check
             this.checkInterval = setInterval(() => {
                 this.checkAndResume();
             }, this.checkIntervalDuration);
-            
+
             // Initial state check
             this.checkAndResume();
-            
+
             this.isActive = true;
-            console.log('AudioKeepAlive: Started (Approach 1 + Approach 2)');
+            console.log(`AudioKeepAlive: Started → device "${outputDeviceId}" (Approach 1 + Approach 2)`);
         } catch (error) {
             console.warn('AudioKeepAlive: Not available', error);
             // Silently fail - keep-alive is optional
         }
     }
 
+    updateSinkId(deviceId) {
+        if (this.audioEl && typeof this.audioEl.setSinkId === 'function') {
+            const sinkId = (deviceId === 'default') ? '' : deviceId;
+            this.audioEl.setSinkId(sinkId).catch(err => {
+                console.warn('AudioKeepAlive: updateSinkId failed', err);
+            });
+        }
+    }
+
     playKeepAliveSignal() {
-        console.log('TEST: Playing keep-alive signal at', new Date().toISOString());
-        
         if (!this.audioContext || this.audioContext.state === 'closed') {
             return;
         }
-        
+
         try {
             // Resume context if suspended
             if (this.audioContext.state === 'suspended') {
@@ -83,22 +110,27 @@ class AudioKeepAlive {
                     // Ignore resume errors
                 });
             }
-            
+
             // Create oscillator for inaudible signal
             const oscillator = this.audioContext.createOscillator();
             const gainNode = this.audioContext.createGain();
-            
+
             oscillator.type = 'sine';
             oscillator.frequency.value = this.frequency;
-            gainNode.gain.value = this.gain;
-            
+
+            // Triangular envelope: 0.5s fade-in, 0.5s fade-out
+            const now = this.audioContext.currentTime;
+            const duration = this.signalDuration / 1000;
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(this.gain, now + 0.5);
+            gainNode.gain.linearRampToValueAtTime(0, now + duration);
+
             oscillator.connect(gainNode);
-            gainNode.connect(this.audioContext.destination);
-            
-            // Start and stop after short duration
-            oscillator.start();
-            oscillator.stop(this.audioContext.currentTime + this.signalDuration / 1000);
-            
+            gainNode.connect(this.streamDestination);
+
+            oscillator.start(now);
+            oscillator.stop(now + duration);
+
             // Clean up after signal completes
             oscillator.onended = () => {
                 try {
@@ -108,6 +140,7 @@ class AudioKeepAlive {
                     // Ignore cleanup errors
                 }
             };
+
         } catch (error) {
             // Silently handle errors (device may not be available)
             console.debug('AudioKeepAlive: Signal playback error', error);
@@ -174,7 +207,15 @@ class AudioKeepAlive {
             }
             this.silentGainNode = null;
         }
-        
+
+        // Output routing cleanup
+        if (this.audioEl) {
+            this.audioEl.pause();
+            this.audioEl.srcObject = null;
+            this.audioEl = null;
+        }
+        this.streamDestination = null;
+
         // Close audio context
         if (this.audioContext) {
             try {
@@ -426,6 +467,15 @@ class FlashbackRecorder {
         this.nextMarkerBtn = document.getElementById('nextMarkerBtn');
         this.debugPanel = document.getElementById('debugPanel');
         this.debugPanelToggle = document.getElementById('debugPanelToggle');
+        this.configPanel = document.getElementById('configPanel');
+        this.configPanelToggle = document.getElementById('configPanelToggle');
+        this.configPanelClose = document.getElementById('configPanelClose');
+        this.configAudioOutputContent = document.getElementById('configAudioOutputContent');
+        this.configMicSelect = document.getElementById('configMicSelect');
+        this.configCameraSelect = document.getElementById('configCameraSelect');
+        this.configVuMeter = document.getElementById('configVuMeter');
+        this.configCameraPreview = document.getElementById('configCameraPreview');
+        this.configMirrorToggle = document.getElementById('configMirrorToggle');
         this.debugSegmentsList = document.getElementById('debugSegmentsList');
         this.debugTotalDuration = document.getElementById('debugTotalDuration');
         this.debugSegmentCount = document.getElementById('debugSegmentCount');
@@ -452,6 +502,7 @@ class FlashbackRecorder {
         this.currentFlashbackIndex = 0;
         this.flashbackVideo = null;
         this.allSessions = [];
+        this._mse = null; // MediaSource context stitching the retained segments into one gapless timeline during flashback
         this.currentReferencePosition = null;
         this.backPressCount = 0;
         this.forwardPressCount = 0;
@@ -466,7 +517,10 @@ class FlashbackRecorder {
         this.recordingStartTime = 0;
         this.totalRecordedTime = 0;
         this.maxDuration = 600; // seconds
-        this.bufferMarginSeconds = 10; // extra margin to ensure an earlier keyframe
+        this.bufferMarginSeconds = 20; // extra margin to ensure an earlier keyframe (>= segment length so whole-segment eviction never bisects)
+        this.segmentDurationSeconds = 15; // rotate the recorder this often so each segment is a self-contained, decodable WebM
+        this._segmentRotationTimer = null; // interval that triggers periodic recorder rotation
+        this._rotating = false; // true while a rotation is in progress (suppresses the onstop auto-save)
         this.lifetimeRecordedDuration = 0; // total duration recorded since launch (monotonic)
         this.sessionBoundaries = [];
         this._pendingRevokes = [];
@@ -531,6 +585,15 @@ class FlashbackRecorder {
         this.photoTimelineResizeDebounce = null; // Debounce timer pour les événements de redimensionnement
         this.currentPhotoExtractionInterval = null; // Périodicité actuelle d'extraction (en secondes)
 
+        // Mirror mode
+        this.mirrorMode = true; // default on (matches CSS scaleX(-1))
+
+        // Config panel / vumeter
+        this.vuMeterAnimId = null;
+        this.vuMeterAudioCtx = null;
+        this.vuMeterAnalyser = null;
+        this.vuMeterSource = null;
+
         // Audio device management (BUG-020)
         this.currentAudioInputDeviceId = null; // ID du périphérique d'entrée actuellement utilisé
         this.currentAudioOutputDeviceId = null; // ID du périphérique de sortie actuellement utilisé
@@ -565,7 +628,6 @@ class FlashbackRecorder {
         this.handleArrowUpKey = this.handleArrowUpKey.bind(this);
         this.handleArrowDownKey = this.handleArrowDownKey.bind(this);
         this.handleTimelineClick = this.handleTimelineClick.bind(this);
-        this.onSessionEnded = this.onSessionEnded.bind(this);
 
         // Create focus overlay (shown when window loses focus)
         this.focusOverlay = document.createElement('div');
@@ -617,9 +679,9 @@ class FlashbackRecorder {
         this.updatePhotoTimelineVisibility(); // Show/hide photo timeline container
         this.initPhotoTimeline(); // Initialize photo timeline
         this.initAudioDeviceManagement(); // Initialize audio device change detection (BUG-020)
-        
-        // Start audio output monitoring for device failure detection (TECH-003)
-        this.audioOutputMonitor.start();
+        this.initConfigPanel();
+        // audioOutputMonitor.start() is called in startRecording(), after getUserMedia,
+        // so enumerateDevices() has permissions and returns real device labels (BUG-022).
         
         this.setState('recording');
         this.startRecording(); // Auto-start as per US-001
@@ -669,13 +731,36 @@ class FlashbackRecorder {
         this.durationRange.addEventListener('input', () => this.updateDurationFromRange());
         this.durationValue.addEventListener('change', () => this.updateDurationFromInput());
 
-        // Debug panel toggle - DISABLED to simplify UI
-        // To re-enable for debugging: uncomment the code below and remove "display: none;" in CSS for .debug-panel and .debug-panel-toggle
-        /*
-        if (this.debugPanelToggle) {
-            this.debugPanelToggle.addEventListener('click', () => this.toggleDebugPanel());
+        // Debug panel toggle — controlled by SHOW_DEBUG_PANEL flag
+        if (SHOW_DEBUG_PANEL) {
+            if (this.debugPanel) this.debugPanel.style.display = 'flex';
+            if (this.debugPanelToggle) {
+                this.debugPanelToggle.style.display = 'flex';
+                this.debugPanelToggle.addEventListener('click', () => this.toggleDebugPanel());
+            }
         }
-        */
+
+        // Config panel
+        if (this.configPanelToggle) {
+            this.configPanelToggle.addEventListener('click', () => {
+                if (this.configPanel.classList.contains('open')) {
+                    this.closeConfigPanel();
+                } else {
+                    this.openConfigPanel();
+                }
+            });
+        }
+        if (this.configPanelClose) {
+            this.configPanelClose.addEventListener('click', () => this.closeConfigPanel());
+        }
+        // Close config panel when clicking outside it
+        document.addEventListener('click', (e) => {
+            if (this.configPanel && this.configPanel.classList.contains('open') &&
+                !this.configPanel.contains(e.target) &&
+                e.target !== this.configPanelToggle) {
+                this.closeConfigPanel();
+            }
+        });
 
         document.addEventListener('keydown', (e) => {
             const active = document.activeElement;
@@ -706,7 +791,11 @@ class FlashbackRecorder {
                     this.handleArrowDownKey();
                     break;
                 case 'Escape':
-                    this.handleEscapeKey();
+                    if (this.configPanel && this.configPanel.classList.contains('open')) {
+                        this.closeConfigPanel();
+                    } else {
+                        this.handleEscapeKey();
+                    }
                     break;
                 default:
                     if (e.code === 'Space') {
@@ -789,6 +878,11 @@ class FlashbackRecorder {
             this.durationRange.value = this.maxDuration;
             this.durationValue.value = this.maxDuration;
         }
+        const savedOutput = localStorage.getItem('preferredAudioOutputDeviceId');
+        if (savedOutput) this.currentAudioOutputDeviceId = savedOutput;
+
+        const savedMirror = localStorage.getItem('flashbackMirrorMode');
+        this.mirrorMode = savedMirror !== null ? savedMirror === 'true' : true;
         // Load waveform visibility setting
         const savedWaveform = localStorage.getItem('flashbackShowWaveform');
         if (savedWaveform !== null) {
@@ -814,6 +908,7 @@ class FlashbackRecorder {
         localStorage.setItem('flashbackMaxDuration', this.maxDuration.toString());
         localStorage.setItem('flashbackShowWaveform', this.showWaveform.toString());
         localStorage.setItem('flashbackShowPhotoTimeline', this.showPhotoTimeline.toString());
+        localStorage.setItem('flashbackMirrorMode', this.mirrorMode.toString());
     }
 
     // ===== WAVEFORM VISUALIZATION METHODS =====
@@ -2858,7 +2953,11 @@ class FlashbackRecorder {
                     // Stop the old stream before obtaining a new one
                     this.stream.getTracks().forEach(track => track.stop());
                 }
-                
+
+                // Preferred devices set by the user in the config panel (FEAT-002)
+                const preferredMicId = localStorage.getItem('preferredAudioInputDeviceId');
+                const preferredCameraId = localStorage.getItem('preferredVideoDeviceId');
+
                 // Request audio with browser-level processing disabled where possible
                 // Additionally, request a basic audio format (44.1 kHz mono) to minimize
                 // automatic processing by device hardware (e.g., M1 chip on MacBook) or
@@ -2870,12 +2969,16 @@ class FlashbackRecorder {
                     noiseSuppression: false,
                     autoGainControl: false,
                     sampleRate: 44100,        // 44.1 kHz (CD standard, less "intelligent" processing)
-                    channelCount: 1            // Mono (bypasses stereo beamforming and spatial filtering)
+                    channelCount: 1,           // Mono (bypasses stereo beamforming and spatial filtering)
+                    ...(preferredMicId ? { deviceId: { ideal: preferredMicId } } : {})
                 };
-                
+                const videoConstraints = preferredCameraId
+                    ? { deviceId: { ideal: preferredCameraId } }
+                    : true;
+
                 try {
                     this.stream = await navigator.mediaDevices.getUserMedia({
-                        video: true,
+                        video: videoConstraints,
                         audio: audioConstraints
                     });
                 } catch (err) {
@@ -2884,11 +2987,12 @@ class FlashbackRecorder {
                     if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
                         console.warn('Audio format constraints not supported, falling back to basic constraints', err);
                         this.stream = await navigator.mediaDevices.getUserMedia({
-                            video: true,
+                            video: videoConstraints,
                             audio: {
                                 echoCancellation: false,
                                 noiseSuppression: false,
-                                autoGainControl: false
+                                autoGainControl: false,
+                                ...(preferredMicId ? { deviceId: { ideal: preferredMicId } } : {})
                             }
                         });
                     } else {
@@ -2920,6 +3024,23 @@ class FlashbackRecorder {
             this.videoPreview.srcObject = this.stream;
             // Mute audio during recording (we still record it, but don't play it)
             this.videoPreview.muted = true;
+            // Apply mirror mode and refresh device labels now that gUM has granted permissions
+            this.applyMirrorMode();
+            this.refreshConfigPanelDevices();
+            // Start audio output monitoring now that getUserMedia has granted permissions,
+            // so enumerateDevices() returns real device labels (BUG-022)
+            this.audioOutputMonitor.start();
+            // Restore preferred output device: verify it's still available, fall back to 'default'
+            if (this.currentAudioOutputDeviceId && this.currentAudioOutputDeviceId !== 'default') {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const available = devices.some(d => d.kind === 'audiooutput' && d.deviceId === this.currentAudioOutputDeviceId);
+                if (available) {
+                    await this.updateFlashbackVideoAudioOutput(this.currentAudioOutputDeviceId);
+                } else {
+                    this.currentAudioOutputDeviceId = 'default';
+                    localStorage.removeItem('preferredAudioOutputDeviceId');
+                }
+            }
             if (this.videoOverlay) {
                 this.videoOverlay.style.display = 'flex';
             }
@@ -2982,7 +3103,7 @@ class FlashbackRecorder {
             };
 
             this.mediaRecorder.onstop = () => {
-                if (this.state !== 'transitioning') {
+                if (this.state !== 'transitioning' && !this._rotating) {
                     this.saveCurrentSession();
                 }
             };
@@ -2999,9 +3120,10 @@ class FlashbackRecorder {
 
             this.updateUIForRecording();
             this.startTimer(); // Start the timer to regularly update the progress bar
-            
+            this.startSegmentRotation(); // Rotate the recorder periodically so each segment is a self-contained WebM
+
             // Start audio keep-alive to prevent speaker/headphone sleep
-            this.audioKeepAlive.start();
+            this.audioKeepAlive.start(this.currentAudioOutputDeviceId || 'default');
             
             // Start inactivity monitoring (BUG-021)
             this.startInactivityMonitor();
@@ -3011,19 +3133,19 @@ class FlashbackRecorder {
     }
 
     stopRecording() {
+        // Stop the periodic recorder rotation
+        this.stopSegmentRotation();
+
         // Stop waveform analysis
         this.stopWaveformAnalysis();
-        
+
         // Stop photo extraction
         this.stopPhotoExtraction();
         this.stopPhotoTimelineRefresh();
-        
-        // Stop audio keep-alive
-        this.audioKeepAlive.stop();
-        
+
         // Stop inactivity monitoring (BUG-021)
         this.stopInactivityMonitor();
-        
+
         if (this.mediaRecorder && this.state === 'recording') {
             this.mediaRecorder.stop();
             this.setState('recordingStopped');
@@ -3039,6 +3161,89 @@ class FlashbackRecorder {
         if (this.state !== 'recording' && this.stream) {
             this.startRecording();
         } else {
+        }
+    }
+
+    // === SEGMENT ROTATION ===
+    // A single continuous MediaRecorder produces ONE WebM stream whose header lives only in the
+    // first chunk; evicting old chunks from the rolling buffer therefore leaves an undecodable,
+    // header-less remainder. To avoid this we periodically stop and restart the recorder so each
+    // segment is a small, self-contained WebM (its own header, timecodes starting at 0). The
+    // rolling buffer can then drop whole old segments without ever corrupting a kept one.
+
+    startSegmentRotation() {
+        this.stopSegmentRotation();
+        // Keep the segment shorter than the retained window so rotation stays meaningful.
+        const seg = Math.max(2, Math.min(this.segmentDurationSeconds, this.maxDuration || this.segmentDurationSeconds));
+        this._segmentRotationTimer = setInterval(() => {
+            this.rotateRecorder();
+        }, seg * 1000);
+    }
+
+    stopSegmentRotation() {
+        if (this._segmentRotationTimer) {
+            clearInterval(this._segmentRotationTimer);
+            this._segmentRotationTimer = null;
+        }
+    }
+
+    async rotateRecorder() {
+        // Only rotate a live recording; never during flashback/transition or a rotation already in flight.
+        if (this._rotating) return;
+        if (this.state !== 'recording') return;
+        if (!this.mediaRecorder || this.mediaRecorder.state !== 'recording') return;
+
+        this._rotating = true;
+        try {
+            // Close the current segment. Detach its onstop so the (asynchronous) stop event cannot
+            // fire late and clobber the next segment; we finalize manually below. Wait for the real
+            // 'stop' event, which follows the final 'dataavailable', so the last chunk is attributed
+            // to this segment before we finalize it.
+            const previousRecorder = this.mediaRecorder;
+            previousRecorder.onstop = null;
+            const stopped = new Promise((resolve) => {
+                previousRecorder.addEventListener('stop', resolve, { once: true });
+            });
+            try {
+                previousRecorder.stop();
+                await stopped;
+            } catch (e) {
+            }
+            // Finalize the just-recorded segment as its own self-contained session.
+            this.saveCurrentSession();
+
+            // A flashback (or stop) may have started while we awaited the recorder; if so, bail out
+            // and let that flow own the recorder instead of resurrecting a live one.
+            if (this.state !== 'recording') {
+                return;
+            }
+
+            // Open a fresh segment with a brand-new header.
+            const options = { mimeType: this.activeMimeType || 'video/webm' };
+            try {
+                this.mediaRecorder = new MediaRecorder(this.stream, options);
+            } catch (e) {
+                return;
+            }
+            this.mediaRecorder.ondataavailable = (event) => {
+                this.handleRecordedChunk(event);
+            };
+            this.mediaRecorder.onstop = () => {
+                if (this.state !== 'transitioning' && !this._rotating) {
+                    this.saveCurrentSession();
+                }
+            };
+            this.currentSessionId = ++this.currentSessionIdCounter;
+            this.currentSessionChunks = [];
+            this.currentSessionStartMs = Date.now();
+            this._lastChunkTimestamp = this.currentSessionStartMs;
+            this.currentSessionHeaderBlob = null;
+            try {
+                this.mediaRecorder.start(1000);
+            } catch (e) {
+            }
+        } finally {
+            this._rotating = false;
         }
     }
 
@@ -3263,6 +3468,7 @@ class FlashbackRecorder {
 
         // Stop recording if necessary and allowed
         if (this.state === 'recording' && allowFromRecording) {
+            this.stopSegmentRotation();
             this.setState('transitioning');
             try {
                 this.mediaRecorder.stop();
@@ -3272,9 +3478,7 @@ class FlashbackRecorder {
             await this.waitForRecorderStop();
             // Manual save necessary because onstop doesn't happen in 'transitioning' state
             this.saveCurrentSession();
-            
-            // Stop audio keep-alive when transitioning to flashback
-            this.audioKeepAlive.stop();
+
         }
 
         if (this.state === 'flashbackPaused' && allowFromFlashbackPaused) {
@@ -3299,7 +3503,7 @@ class FlashbackRecorder {
         }
 
         // Start flashback
-        this.playFlashbackFromTimestamp(clampedTarget);
+        await this.playFlashbackFromTimestamp(clampedTarget);
     }
 
     calculateTargetTimeFromClick(x, rect, isTimeline = true) {
@@ -3663,6 +3867,7 @@ class FlashbackRecorder {
          */
         await this.updateDeviceList();
         await this.checkDeviceChanges();
+        this.refreshConfigPanelDevices();
     }
 
     async checkDeviceChanges() {
@@ -3686,22 +3891,17 @@ class FlashbackRecorder {
             const defaultOutputDevice = audioOutputDevices.length > 0 ? audioOutputDevices[0] : null;
             const defaultOutputDeviceId = defaultOutputDevice ? defaultOutputDevice.deviceId : null;
 
-            // Initialize device IDs if not set (first run)
-            if (!this.currentAudioOutputDeviceId && defaultOutputDeviceId) {
-                this.currentAudioOutputDeviceId = defaultOutputDeviceId;
-                // Set initial output device for flashback video if it exists
-                await this.updateFlashbackVideoAudioOutput(defaultOutputDeviceId);
-                // Notify audio output monitor of initial device
+            // Initialize output device on first run — always use 'default' so Chrome/Firefox
+            // follows the OS output device automatically, including Bluetooth speakers.
+            if (!this.currentAudioOutputDeviceId) {
+                this.currentAudioOutputDeviceId = 'default';
+                await this.updateFlashbackVideoAudioOutput('default');
                 if (this.audioOutputMonitor) {
-                    this.audioOutputMonitor.setCurrentDevice(defaultOutputDeviceId);
+                    this.audioOutputMonitor.setCurrentDevice('default');
                 }
-                // Don't show overlay on first initialization
-            }
-
-            // Check for output device changes (only if device ID was already set)
-            if (defaultOutputDeviceId && this.currentAudioOutputDeviceId && 
-                defaultOutputDeviceId !== this.currentAudioOutputDeviceId) {
-                await this.updateAudioOutputDevice(defaultOutputDeviceId);
+            } else if (this.currentAudioOutputDeviceId === 'default') {
+                // Re-apply on every devicechange so routing stays current after BT connect/disconnect.
+                await this.updateFlashbackVideoAudioOutput('default');
             }
 
             // Check for input device changes
@@ -3748,42 +3948,27 @@ class FlashbackRecorder {
         this.showDeviceChangeOverlay(deviceLabel || 'Unknown device', 'output');
     }
 
-    async updateFlashbackVideoAudioOutput(deviceId = null) {
+    async updateFlashbackVideoAudioOutput(deviceId = 'default') {
         /**
-         * Update audio output device for flashback video
-         * Uses setSinkId() if available, otherwise relies on browser's automatic routing
+         * Update audio output device for flashback video.
+         * Uses setSinkId() when available (Chrome/Edge/Firefox).
+         * Passing 'default' follows the OS default output device automatically.
+         * On Safari (no setSinkId), the browser routes to OS default without action.
          */
         if (!this.flashbackVideo) return;
 
-        // If deviceId not provided, get default from system
-        if (!deviceId) {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const audioOutputDevices = devices.filter(d => d.kind === 'audiooutput');
-                if (audioOutputDevices.length > 0) {
-                    deviceId = audioOutputDevices[0].deviceId;
-                    this.currentAudioOutputDeviceId = deviceId;
-                }
-            } catch (err) {
-                console.warn('Error getting default audio output device:', err);
-                return;
-            }
-        }
-
-        // Try to use setSinkId() if available (Chrome/Edge)
         if (typeof this.flashbackVideo.setSinkId === 'function') {
+            // '' (empty string) = browser default (follows OS), per the Web Audio Output Devices spec.
+            // 'default' is Chrome's virtual device ID and may not follow the OS default reliably.
+            const sinkId = (deviceId === 'default') ? '' : deviceId;
             try {
-                await this.flashbackVideo.setSinkId(deviceId);
-                console.log('Audio output device updated via setSinkId:', deviceId);
+                await this.flashbackVideo.setSinkId(sinkId);
+                console.log('Audio output device updated via setSinkId:', sinkId || '(browser default)');
             } catch (err) {
                 console.warn('Error setting audio output device via setSinkId:', err);
-                // Fallback: browser will handle routing automatically
             }
-        } else {
-            // Browser will automatically route to default device
-            // No action needed, but log for debugging
-            console.log('Audio output will use default device (setSinkId not available)');
         }
+        // On Safari / browsers without setSinkId: audio follows OS default automatically.
     }
 
     async handleAudioInputDeviceChange(newDeviceId, newDevice) {
@@ -3998,12 +4183,7 @@ class FlashbackRecorder {
     }
 
     handleRecordedChunk(event) {
-        console.log('handleRecordedChunk: New chunk received', {
-            dataSize: event.data.size,
-            absoluteStart: this.lifetimeRecordedDuration,
-            currentSessionChunksLengthBefore: this.currentSessionChunks.length,
-            chunkBufferLengthBefore: this.chunkBuffer.length
-        });
+
         if (!event || !event.data || event.data.size === 0) {
             return;
         }
@@ -4422,13 +4602,73 @@ class FlashbackRecorder {
         this.debugLogState('save:end', { newSessionId: sessionId });
     }
 
+    // Drop whole finalized segments (oldest first) that fall outside the retained window.
+    // Because every segment is a self-contained WebM, removing entire segments keeps each surviving
+    // segment decodable — unlike chunk-granular eviction, which strips a segment's header.
+    dropOldestSessionsToFit() {
+        const keep = Number.isFinite(this.maxDuration) ? Math.max(0, this.maxDuration) : 0;
+        if (keep <= 0) {
+            return false;
+        }
+        let changed = false;
+        while (this.recordedSessions.length > 0) {
+            const oldest = this.recordedSessions[0];
+            if (!oldest) {
+                break;
+            }
+            // Never drop the segment currently being recorded.
+            if (oldest.id === this.currentSessionId) {
+                break;
+            }
+            const oldestDuration = oldest.duration || 0;
+            // Stop once dropping the oldest segment would leave us below the retained window.
+            if (this._bufferedDuration - oldestDuration < keep) {
+                break;
+            }
+            this.dropSessionCompletely(oldest);
+            changed = true;
+        }
+        return changed;
+    }
+
+    // Remove a whole session and all of its chunks from the rolling buffer.
+    dropSessionCompletely(session) {
+        if (!session) {
+            return;
+        }
+        const ids = new Set((session.chunks || []).map(chunk => chunk.id));
+        if (ids.size > 0) {
+            this.chunkBuffer = this.chunkBuffer.filter(chunk => {
+                if (ids.has(chunk.id)) {
+                    this._bufferedDuration = Math.max(0, this._bufferedDuration - (chunk.duration || 0));
+                    chunk.blob = null;
+                    return false;
+                }
+                return true;
+            });
+        }
+        this.sessionMap.delete(session.id);
+        this.recordedSessions = this.recordedSessions.filter(s => s !== session);
+        if (this.pendingSessionId === session.id) {
+            this.pendingSessionId = null;
+            this.pendingSessionChunks = [];
+        }
+        if (session.blobUrl) {
+            try { URL.revokeObjectURL(session.blobUrl); } catch (e) { /* noop */ }
+            session.blobUrl = null;
+        }
+        session.headerBlob = null;
+    }
+
     enforceRollingBuffer() {
         const maxBufferedDuration = this.getMaxBufferedDuration();
         if (!Number.isFinite(maxBufferedDuration) || maxBufferedDuration <= 0) {
             return;
         }
 
-        let removedAny = false;
+        // Primary path: drop whole self-contained segments. This keeps the buffer at or below the
+        // retained window so the chunk-granular fallback below stays dormant during normal recording.
+        let removedAny = this.dropOldestSessionsToFit();
 
         while (this._bufferedDuration > maxBufferedDuration && this.chunkBuffer.length > 0) {
             const removed = this.chunkBuffer.shift();
@@ -4662,6 +4902,11 @@ class FlashbackRecorder {
             this.debugLogState('trim:skip-invalid-max', { maxBufferedDuration });
             return;
         }
+        // Prefer dropping whole self-contained segments; this keeps the buffer at/under the retained
+        // window so the chunk-granular loop below (which would strip a segment header) stays dormant.
+        if (this.dropOldestSessionsToFit()) {
+            changed = true;
+        }
         while (this._bufferedDuration > maxBufferedDuration && this.chunkBuffer.length > 0) {
             const oldest = this.chunkBuffer.shift();
             if (!oldest) {
@@ -4872,67 +5117,246 @@ class FlashbackRecorder {
         });
     }
 
-    // === COMMON PLAYBACK FUNCTIONS ===
+    // === FLASHBACK PLAYBACK (MediaSource) ===
+    // The retained segments are self-contained WebM files. Stitching them into a single MediaSource
+    // SourceBuffer (mode 'sequence') yields ONE continuous, gapless timeline with a real finite
+    // duration — no per-segment reload seams and no reliance on the unknown per-blob duration.
+    // A small map converts between absolute recording time and MediaSource time.
 
-    async playFromTimestamp(timestamp) {
-        // Step 1: Handle stopping recording if necessary
-        if (this.state === 'recording') {
-            this.setState('transitioning');
-
-            // Stop the recorder
-            try {
-                this.mediaRecorder.stop();
-            } catch (e) {
-            }
-            this.stopTimer();
-
-            // Wait for finalization and save
-            await this.waitForRecorderStop();
-            this.saveCurrentSession();
-
-            // Prepare sessions for flashback
-            this.allSessions = [...this.recordedSessions];
-        }
-
-        // Step 2: Start flashback
-        this.playFlashbackFromTimestamp(timestamp);
-    }
-
-    playFlashbackFromTimestamp(timestamp) {
+    async playFlashbackFromTimestamp(timestamp) {
         if (!Number.isFinite(timestamp)) {
             timestamp = 0;
         }
-        const sessions = this.allSessions || [];
+        // seekFlashback bumped _flashbackId; capture it so async work can detect interruption.
+        const fbId = this._flashbackId;
+        const sessions = this.recordedSessions || [];
         if (sessions.length === 0) {
             return;
         }
+        this.allSessions = [...sessions];
 
-        for (let i = 0; i < sessions.length; i++) {
-            const session = sessions[i];
-            const sessionStartAbs = session.visibleStartAbs ?? session.absoluteStart ?? 0;
-            const sessionEndAbs = session.visibleEndAbs ?? sessionStartAbs;
-
-            if (timestamp < sessionStartAbs) {
-                this.currentFlashbackIndex = i;
-                this.playCurrentFlashbackSession(0);
+        // (Re)build the MediaSource only when we don't already have a matching one (fresh flashback
+        // or the segment set changed). Repeated back/forward presses reuse it and just re-seek.
+        if (!this._mse || !this._mse.ready || this._mse.segCount !== sessions.length) {
+            this.clearFlashbackMonitors();
+            this._teardownMse();
+            // Attach the video element up front: a MediaSource only fires 'sourceopen' once it is
+            // bound to a media element, so _buildFlashbackMediaSource needs the element ready.
+            this.flashbackVideo = this.videoPreview;
+            this.videoPreview.srcObject = null;
+            this.videoPreview.muted = false;
+            const built = await this._buildFlashbackMediaSource(sessions);
+            if (this._flashbackId !== fbId) {
+                // A newer flashback superseded this one while we were building.
+                this._teardownMse(built);
                 return;
             }
-
-            if (timestamp < sessionEndAbs) {
-                this.currentFlashbackIndex = i;
-                const seekTime = Math.max(0, timestamp - sessionStartAbs);
-                this.playCurrentFlashbackSession(seekTime);
+            if (!built) {
+                this.showMessage('Flashback playback error', 'error');
+                this._teardownMse();
+                this.flashbackVideo = null;
+                this.previousAbsoluteTime = null;
+                this.setState('recordingStopped');
+                this.resumeRecording();
                 return;
             }
+            this._mse = built;
+            this.updateFlashbackVideoAudioOutput(this.currentAudioOutputDeviceId || 'default');
         }
 
-        const lastIndex = sessions.length - 1;
-        const lastSession = sessions[lastIndex];
-        const lastStartAbs = lastSession.visibleStartAbs ?? lastSession.absoluteStart ?? 0;
-        const lastEndAbs = lastSession.visibleEndAbs ?? lastStartAbs;
-        this.currentFlashbackIndex = lastIndex;
-        const clamped = Math.max(0, Math.min(timestamp, lastEndAbs) - lastStartAbs);
-        this.playCurrentFlashbackSession(clamped);
+        // Position the single timeline at the requested absolute time.
+        const mseTime = this._absToMse(timestamp);
+        try {
+            this.flashbackVideo.currentTime = mseTime;
+        } catch (e) {
+            try { this.flashbackVideo.currentTime = 0; } catch (e2) { /* noop */ }
+        }
+        this._syncFlashbackIndex(timestamp);
+
+        // (Re)wire the handlers for this flashback id, transition state, and play.
+        this._attachFlashbackHandlers(fbId);
+        this.setState('flashback');
+        this.updateUIForFlashback();
+        this.updateDebugPanel();
+        this.startTimer();
+        this.stopPhotoExtraction();
+        this.stopPhotoTimelineRefresh();
+
+        const tryPlay = () => this.flashbackVideo && this.flashbackVideo.play();
+        Promise.resolve()
+            .then(tryPlay)
+            .catch(() => {
+                // A rejected play() (e.g. transient autoplay/power-save interruption) shouldn't kill
+                // the flashback — retry once; if it still fails, stay paused in flashback.
+                if (this._flashbackId !== fbId) return;
+                return Promise.resolve().then(tryPlay).catch(() => {});
+            });
+    }
+
+    // Build a MediaSource that concatenates every retained segment into one gapless timeline.
+    // Returns a context { mediaSource, objectUrl, sourceBuffer, segMap, segCount, totalMse,
+    // windowStartAbs, windowEndAbs, ready } or null if it could not be built.
+    async _buildFlashbackMediaSource(sessions) {
+        const entries = sessions
+            .map(session => ({ session, blob: this.buildFlashbackSessionBlob(session) }))
+            .filter(entry => entry.blob && entry.blob.size > 0);
+        if (entries.length === 0) {
+            return null;
+        }
+        const mime = entries[0].blob.type || this.activeMimeType || 'video/webm';
+        if (!(window.MediaSource && MediaSource.isTypeSupported(mime))) {
+            return null;
+        }
+        const mediaSource = new MediaSource();
+        const objectUrl = URL.createObjectURL(mediaSource);
+        const ctx = {
+            mediaSource, objectUrl, sourceBuffer: null,
+            segMap: [], segCount: sessions.length, totalMse: 0,
+            windowStartAbs: 0, windowEndAbs: 0, ready: false
+        };
+
+        // Bind the MediaSource to the video element so 'sourceopen' fires.
+        this.videoPreview.srcObject = null;
+        this.videoPreview.src = objectUrl;
+        try { this.videoPreview.load(); } catch (e) { /* noop */ }
+
+        await new Promise((resolve) => {
+            const timeout = setTimeout(resolve, 5000); // give up rather than hang
+            mediaSource.addEventListener('sourceopen', async () => {
+                clearTimeout(timeout);
+                try {
+                    const sb = mediaSource.addSourceBuffer(mime);
+                    sb.mode = 'sequence'; // place each segment right after the previous one
+                    ctx.sourceBuffer = sb;
+                    let cursor = 0;
+                    for (const { session, blob } of entries) {
+                        const buffer = await blob.arrayBuffer();
+                        await new Promise((res, rej) => {
+                            sb.addEventListener('updateend', res, { once: true });
+                            sb.addEventListener('error', () => rej(new Error('append-error')), { once: true });
+                            sb.appendBuffer(buffer);
+                        });
+                        const mseEnd = sb.buffered.length ? sb.buffered.end(sb.buffered.length - 1) : cursor;
+                        // Map the full segment span (preroll + visible) so playback time lines up with
+                        // absolute recording time across the whole window.
+                        const absStart = session.absoluteStart ?? session.visibleStartAbs ?? 0;
+                        const absEnd = session.absoluteEnd ?? session.visibleEndAbs ?? absStart;
+                        ctx.segMap.push({ absStart, absEnd, mseStart: cursor, mseEnd });
+                        cursor = mseEnd;
+                    }
+                    try { mediaSource.endOfStream(); } catch (e) { /* noop */ }
+                    ctx.totalMse = cursor;
+                    ctx.windowStartAbs = ctx.segMap[0].absStart;
+                    ctx.windowEndAbs = ctx.segMap[ctx.segMap.length - 1].absEnd;
+                    ctx.ready = true;
+                } catch (e) {
+                    // leave ctx.ready false
+                }
+                resolve();
+            }, { once: true });
+        });
+
+        if (!ctx.ready) {
+            try { URL.revokeObjectURL(objectUrl); } catch (e) { /* noop */ }
+            return null;
+        }
+        return ctx;
+    }
+
+    // Convert an absolute recording timestamp to a position on the MediaSource timeline.
+    _absToMse(absTime) {
+        const ctx = this._mse;
+        if (!ctx || ctx.segMap.length === 0) {
+            return 0;
+        }
+        const clamped = Math.max(ctx.windowStartAbs, Math.min(absTime, ctx.windowEndAbs));
+        for (const seg of ctx.segMap) {
+            if (clamped <= seg.absEnd) {
+                const absSpan = seg.absEnd - seg.absStart;
+                const frac = absSpan > 0 ? (clamped - seg.absStart) / absSpan : 0;
+                return seg.mseStart + Math.max(0, Math.min(1, frac)) * (seg.mseEnd - seg.mseStart);
+            }
+        }
+        return ctx.totalMse;
+    }
+
+    // Convert a MediaSource timeline position back to an absolute recording timestamp.
+    _mseToAbs(mseTime) {
+        const ctx = this._mse;
+        if (!ctx || ctx.segMap.length === 0) {
+            return this.visibleWindowEnd ?? this.lifetimeRecordedDuration ?? 0;
+        }
+        for (const seg of ctx.segMap) {
+            if (mseTime <= seg.mseEnd) {
+                const mseSpan = seg.mseEnd - seg.mseStart;
+                const frac = mseSpan > 0 ? (mseTime - seg.mseStart) / mseSpan : 0;
+                return seg.absStart + Math.max(0, Math.min(1, frac)) * (seg.absEnd - seg.absStart);
+            }
+        }
+        return ctx.windowEndAbs;
+    }
+
+    // Keep currentFlashbackIndex roughly aligned with the played position (debug panel highlight).
+    _syncFlashbackIndex(absTime) {
+        const ctx = this._mse;
+        if (!ctx) return;
+        for (let i = 0; i < ctx.segMap.length; i++) {
+            if (absTime <= ctx.segMap[i].absEnd) { this.currentFlashbackIndex = i; return; }
+        }
+        this.currentFlashbackIndex = Math.max(0, ctx.segMap.length - 1);
+    }
+
+    // Attach the timeupdate/ended/error handlers for the flashback identified by fbId.
+    _attachFlashbackHandlers(fbId) {
+        const video = this.flashbackVideo;
+        if (!video) return;
+        this._detachFlashbackHandlers();
+
+        this._timeupdateHandler = () => {
+            if (this._flashbackId !== fbId) { this._detachFlashbackHandlers(); return; }
+            this._syncFlashbackIndex(this._mseToAbs(video.currentTime || 0));
+            this.updateTimeline();
+            this.updateAllPlaybackPositions();
+        };
+        this._onEndedHandler = () => {
+            if (this._flashbackId !== fbId) return;
+            // Reached the live edge of the retained window — hand back to live recording.
+            this.resumeRecordingAfterFlashback();
+        };
+        this._onErrorHandler = () => {
+            if (this._flashbackId !== fbId) return;
+            this.showMessage('Flashback playback error', 'error');
+            this.resumeRecordingAfterFlashback();
+        };
+        video.addEventListener('timeupdate', this._timeupdateHandler);
+        video.addEventListener('ended', this._onEndedHandler);
+        video.addEventListener('error', this._onErrorHandler);
+    }
+
+    _detachFlashbackHandlers() {
+        const video = this.flashbackVideo;
+        if (video) {
+            if (this._timeupdateHandler) video.removeEventListener('timeupdate', this._timeupdateHandler);
+            if (this._onEndedHandler) video.removeEventListener('ended', this._onEndedHandler);
+            if (this._onErrorHandler) video.removeEventListener('error', this._onErrorHandler);
+        }
+        this._timeupdateHandler = null;
+        this._onEndedHandler = null;
+        this._onErrorHandler = null;
+    }
+
+    // Tear down a MediaSource context and release its object URL.
+    _teardownMse(ctx = this._mse) {
+        if (!ctx) return;
+        try {
+            if (ctx.mediaSource && ctx.mediaSource.readyState === 'open') {
+                ctx.mediaSource.endOfStream();
+            }
+        } catch (e) { /* noop */ }
+        try { URL.revokeObjectURL(ctx.objectUrl); } catch (e) { /* noop */ }
+        if (ctx === this._mse) {
+            this._mse = null;
+        }
     }
 
     waitForRecorderStop() { // Wait for the recorder to stop (it just waits for the recorder to stop)
@@ -4952,13 +5376,6 @@ class FlashbackRecorder {
             };
             this.mediaRecorder.addEventListener('stop', handler, { once: true }); // Add the listener once to prevent duplicates
         });
-    }
-
-    playFlashbackFromStart(sessions) {
-        this.allSessions = sessions;
-        this.currentFlashbackIndex = 0;
-        this.currentReferencePosition = 0;
-        this.playCurrentFlashbackSession(0);
     }
 
     buildFlashbackSessionBlob(session) {
@@ -4995,449 +5412,7 @@ class FlashbackRecorder {
         return new Blob(parts, { type: mimeType });
     }
 
-    playCurrentFlashbackSession(seekTime = 0) {
-        if (this.currentFlashbackIndex >= this.allSessions.length) {
-            this.resumeRecordingAfterFlashback();
-            return;
-        }
-
-        // Capture the current flashback ID for use in error handlers
-        const sessionFlashbackId = this._flashbackId;
-
-        // IMMEDIATE CLEANUP: Stop and clean up ALL handlers of the previous flashback
-        // This must be done BEFORE changing the video source to avoid race conditions
-        if (this.flashbackVideo) {
-            this.flashbackVideo.pause();
-            // Remove all event listeners
-            if (this._timeupdateHandler) {
-                this.flashbackVideo.removeEventListener('timeupdate', this._timeupdateHandler);
-                this._timeupdateHandler = null;
-            }
-            if (this._onEndedHandler) {
-                this.flashbackVideo.removeEventListener('ended', this._onEndedHandler);
-                this._onEndedHandler = null;
-            }
-            if (this._onErrorHandler) {
-                this.flashbackVideo.removeEventListener('error', this._onErrorHandler);
-                this._onErrorHandler = null;
-            }
-            // Remove all remaining listeners by changing the source
-            this.videoPreview.srcObject = null;
-        }
-        // Clear all timers
-        if (this._flashbackTimeout) {
-            clearTimeout(this._flashbackTimeout);
-            this._flashbackTimeout = null;
-        }
-        if (this._flashbackInterval) {
-            clearInterval(this._flashbackInterval);
-            this._flashbackInterval = null;
-        }
-        if (this._timeupdateGuardTimeout) {
-            clearTimeout(this._timeupdateGuardTimeout);
-            this._timeupdateGuardTimeout = null;
-        }
-        if (this._metadataTimeout) {
-            clearTimeout(this._metadataTimeout);
-            this._metadataTimeout = null;
-        }
-        this._finalizeFlashback = null;
-        // Reset flags
-        this._endedFired = false;
-
-        const session = this.allSessions[this.currentFlashbackIndex];
-        if (!session || !session.chunks || session.chunks.length === 0) {
-            this.onSessionEnded(sessionFlashbackId);
-            return;
-        }
-        this.debugLogState('play:start', {
-            sessionId: session.id,
-            flashbackIndex: this.currentFlashbackIndex,
-            chunkCount: session.chunks.length,
-            hasHeaderBlob: !!session.headerBlob,
-            chunkIds: session.chunks.map(chunk => chunk.id),
-            chunkSizes: session.chunks.map(chunk => (chunk && chunk.blob) ? chunk.blob.size : 0),
-            chunkDurations: session.chunks.map(chunk => Number((chunk?.duration || 0).toFixed(2))),
-            seekTime,
-            preRollDuration: Number((session.preRollDuration || 0).toFixed(2)),
-            visibleDuration: Number((session.duration || 0).toFixed(2))
-        });
-        const visibleDuration = session.duration || session.playableDuration || 0;
-        const preRollDuration = session.preRollDuration || 0;
-        const sessionDuration = visibleDuration; // alias for backward compatibility
-        const sessionBlob = this.buildFlashbackSessionBlob(session);
-        if (!sessionBlob) {
-            this.debugLogState('play:blob-null', { sessionId: session.id, flashbackIndex: this.currentFlashbackIndex });
-            this.onSessionEnded(sessionFlashbackId);
-            return;
-        }
-        this.debugLogState('play:blob-ready', {
-            sessionId: session.id,
-            flashbackIndex: this.currentFlashbackIndex,
-            blobSize: sessionBlob.size,
-            mimeType: sessionBlob.type,
-            preRollDuration: Number(preRollDuration.toFixed(2)),
-            visibleDuration: Number(visibleDuration.toFixed(2))
-        });
-        // Always recreate a fresh blob URL to avoid using a revoked URL
-        if (session.blobUrl) {
-            try { URL.revokeObjectURL(session.blobUrl); } catch (e) { /* noop */ }
-        }
-        session.blobUrl = URL.createObjectURL(sessionBlob);
-
-        // Always detach the camera stream before attaching a video source
-        this.videoPreview.srcObject = null;
-        this.flashbackVideo = this.videoPreview; // Attach the new video element
-        this.flashbackVideo.src = session.blobUrl; // Attach the new blob URL
-        try { // Load the new video
-            this.flashbackVideo.load(); 
-        } catch (e) {
-        }
-        this.flashbackVideo.muted = false; // Enable sound
-
-        // Set audio output device to default (BUG-020)
-        this.updateFlashbackVideoAudioOutput();
-
-        // Timeout to detect if loadedmetadata never fires
-        const metadataTimeout = setTimeout(() => {
-            // Check if this flashback is still active (not interrupted by a new flashback)
-            if (this._flashbackId !== sessionFlashbackId) {
-                // This flashback has been interrupted, ignore this call
-                return;
-            }
-            this.showMessage('Video loading error', 'error');
-            // Move to the next session if we can't load this one
-            this.onSessionEnded(sessionFlashbackId);
-        }, 5000);
-        this._metadataTimeout = metadataTimeout;
-
-        const onLoadedMetadata = () => {
-            /**
-             * Event handler for loadedmetadata - fires when video metadata is loaded
-             *
-             * Essential roles:
-             * 1. Validate actual duration vs estimated duration at recording
-             * 2. Adjust seekTime to avoid exceeding video end
-             * 3. Position video cursor at the correct timestamp
-             * 4. Transition state to 'flashback' (critical synchronization)
-             * 5. Initialize timers and event handlers
-             *
-             * Important: The metadata (duration, dimensions, codecs) is not immediately available
-             * after video.src = blobUrl. We need to wait for this event.
-             */
-            
-            // 0. Initial cleanup: clear timeout and remove event listener
-            clearTimeout(metadataTimeout);
-            this.flashbackVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
-            if (this._metadataTimeout === metadataTimeout) {
-                this._metadataTimeout = null;
-            }
-
-            // CAPTURE the current flashback ID for verification in all handlers
-            // If _flashbackId changes (new flashback), all handlers of this flashback will be invalidated
-            const currentFlashbackId = this._flashbackId;
-            const finalizeFlashback = (reason) => {
-                if (this._flashbackId !== currentFlashbackId) {
-                    return;
-                }
-                if (this._endedFired) {
-                    return;
-                }
-                this._endedFired = true;
-                this._finalizeFlashback = null;
-                if (this._flashbackTimeout) {
-                    clearTimeout(this._flashbackTimeout);
-                    this._flashbackTimeout = null;
-                }
-                if (this._flashbackInterval) {
-                    clearInterval(this._flashbackInterval);
-                    this._flashbackInterval = null;
-                }
-                if (this._timeupdateGuardTimeout) {
-                    clearTimeout(this._timeupdateGuardTimeout);
-                    this._timeupdateGuardTimeout = null;
-                }
-                if (this._metadataTimeout) {
-                    clearTimeout(this._metadataTimeout);
-                    this._metadataTimeout = null;
-                }
-                if (this.flashbackVideo && this._timeupdateHandler) {
-                    this.flashbackVideo.removeEventListener('timeupdate', this._timeupdateHandler);
-                    this._timeupdateHandler = null;
-                }
-                if (this.flashbackVideo && this._onEndedHandler) {
-                    this.flashbackVideo.removeEventListener('ended', this._onEndedHandler);
-                    this._onEndedHandler = null;
-                }
-                if (this.flashbackVideo && this._onErrorHandler) {
-                    this.flashbackVideo.removeEventListener('error', this._onErrorHandler);
-                    this._onErrorHandler = null;
-                }
-                if (session && session.blobUrl) {
-                    try { URL.revokeObjectURL(session.blobUrl); } catch (e) { /* noop */ }
-                    session.blobUrl = null;
-                }
-                this.onSessionEnded(currentFlashbackId);
-            };
-            this._finalizeFlashback = finalizeFlashback;
-
-            // 1. Validate actual duration vs estimated duration at recording
-            const expectedMediaDuration = preRollDuration + visibleDuration;
-            const actualVideoDuration = this.flashbackVideo.duration || expectedMediaDuration;
-            const durationDiff = actualVideoDuration - expectedMediaDuration; // Difference between actual and expected duration (preRoll + visible)
-            // });
-            
-            // 2. Adjust seekTime to avoid exceeding video end
-            const clampedVisibleSeek = Math.min(Math.max(seekTime, 0), Math.max(0, visibleDuration));
-            const mediaSeekTime = Math.min(
-                Math.max(clampedVisibleSeek + preRollDuration, 0),
-                Math.max(actualVideoDuration - 0.05, 0)
-            );
-            if (mediaSeekTime !== seekTime) {
-            }
-
-            // 3. Position video cursor at the correct timestamp
-            try {
-                this.flashbackVideo.currentTime = mediaSeekTime;
-            } catch (e) {
-                this.flashbackVideo.currentTime = 0;
-            }
-
-            // 4. Transition state to 'flashback' (critical synchronization)
-            this.setState('flashback');
-            this.updateUIForFlashback();
-            this.updateDebugPanel(); // Update panel to highlight the current segment being played
-            this.startTimer(); // Start timer for flashback
-
-            // Stop photo extraction during flashback (only extract during recording)
-            this.stopPhotoExtraction();
-            this.stopPhotoTimelineRefresh();
-
-            // 5. Initialize timers and event handlers
-            // Clean up old handlers
-            if (this._timeupdateHandler) {
-                this.flashbackVideo.removeEventListener('timeupdate', this._timeupdateHandler);
-            }
-            if (this._flashbackTimeout) {
-                clearTimeout(this._flashbackTimeout);
-            }
-            if (this._flashbackInterval) {
-                clearInterval(this._flashbackInterval);
-            }
-            
-            // Handler for ended - store flag and function on this for safety
-            this._endedFired = false;
-            this._lastCheckTime = Date.now();
-            this._lastVideoTime = mediaSeekTime;
-            // Separate variable for interval (won't be overwritten by timeupdate)
-            let intervalLastVideoTime = mediaSeekTime;
-            let intervalLastCheckTime = Date.now();
-            
-            const onEnded = () => finalizeFlashback('ended');
-            this._onEndedHandler = onEnded; // Store for safety
-            this.flashbackVideo.addEventListener('ended', onEnded, { once: true });
-            
-            // Absolute timeout based on estimated duration: force finish after estimatedDuration - seekTime + margin
-            const remainingDuration = Math.max(0, visibleDuration - clampedVisibleSeek);
-            const timeoutMs = (remainingDuration + 1) * 1000; // +1s margin
-            this._flashbackTimeout = setTimeout(() => {
-                // Check if this flashback is still active (not interrupted by a new flashback)
-                if (this._flashbackId !== currentFlashbackId) {
-                    // This flashback has been interrupted, ignore this call
-                    return;
-                }
-                if (!this._endedFired) {
-                    //     currentTime: this.flashbackVideo.currentTime,
-                    //     duration: this.flashbackVideo.duration,
-                    //     estimatedDuration: sessionDuration
-                    // });
-                    finalizeFlashback('timeout');
-                }
-            }, timeoutMs);
-            
-            // Interval for checking if video is blocked or ended
-            this._flashbackInterval = setInterval(() => {
-                // Check if this flashback is still active (not interrupted by a new flashback)
-                if (this._flashbackId !== currentFlashbackId) {
-                    // This flashback has been interrupted, clear and exit
-                    clearInterval(this._flashbackInterval);
-                    this._flashbackInterval = null;
-                    return;
-                }
-                if (this._endedFired) {
-                    clearInterval(this._flashbackInterval);
-                    this._flashbackInterval = null;
-            return;
-        }
-                const now = Date.now();
-                const currentVideoTime = this.flashbackVideo.currentTime || 0;
-                const targetEndTime = Math.min(actualVideoDuration, preRollDuration + visibleDuration);
-                const videoDuration = this.flashbackVideo.duration || targetEndTime;
-                const timeSinceLastIntervalCheck = (now - intervalLastCheckTime) / 1000;
-                const videoTimeDiff = Math.abs(currentVideoTime - intervalLastVideoTime);
-                
-                
-                // If video hasn't progressed for more than 1.5s (detected by interval), force finish
-                if (timeSinceLastIntervalCheck > 1.5 && videoTimeDiff < 0.1) {
-                    clearInterval(this._flashbackInterval);
-                    this._flashbackInterval = null;
-                    finalizeFlashback('interval-stuck');
-                    return;
-                }
-                
-                // If we've reached or exceeded the actual duration of the video, force finish
-                if (videoDuration && currentVideoTime >= videoDuration - 0.2) {
-                    clearInterval(this._flashbackInterval);
-                    this._flashbackInterval = null;
-                    finalizeFlashback('interval-duration');
-            return;
-        }
-
-                // If we've reached or exceeded the estimated duration, force finish (safety)
-                if (currentVideoTime >= targetEndTime - 0.1) {
-                    clearInterval(this._flashbackInterval);
-                    this._flashbackInterval = null;
-                    finalizeFlashback('interval-estimate');
-                    return;
-                }
-                
-                // Update values for next check (only if video is progressing)
-                if (videoTimeDiff >= 0.1) {
-                    intervalLastCheckTime = now;
-                    intervalLastVideoTime = currentVideoTime;
-                }
-            }, 500); // Check every 500ms
-            
-            // timeupdate handler with video end check
-            this._timeupdateHandler = () => {
-                // Playback positions are now updated via updateAllPlaybackPositions() at 100ms intervals
-                // No need to update here to avoid duplicate updates
-                
-                // Check if this flashback is still active (not interrupted by a new flashback)
-                if (this._flashbackId !== currentFlashbackId) {
-                    // This flashback has been interrupted, remove this handler and exit
-                    if (this.flashbackVideo && this._timeupdateHandler) {
-                        this.flashbackVideo.removeEventListener('timeupdate', this._timeupdateHandler);
-                    }
-                    this._timeupdateHandler = null;
-                    return;
-                }
-                this.updateTimeline();
-                const currentTime = this.flashbackVideo.currentTime || 0;
-                this._lastVideoTime = currentTime;
-                this._lastCheckTime = Date.now();
-                
-                // Safety: if we're very close to the end and ended hasn't fired
-                if (!this._endedFired) {
-                    const targetEndTime = Math.min(actualVideoDuration, preRollDuration + visibleDuration);
-                    const videoDuration = this.flashbackVideo.duration || targetEndTime;
-                    if (currentTime >= videoDuration - 0.2 || currentTime >= targetEndTime - 0.2) {
-                        // Force immediately rather than waiting
-                        if (this._timeupdateGuardTimeout) {
-                            clearTimeout(this._timeupdateGuardTimeout);
-                        }
-                        this._timeupdateGuardTimeout = setTimeout(() => {
-                            // Check again if this flashback is still active
-                            if (this._flashbackId !== currentFlashbackId) {
-                                return;
-                            }
-                            this._timeupdateGuardTimeout = null;
-                            if (!this._endedFired) {
-                                finalizeFlashback('timeupdate-guard');
-                            }
-                        }, 100);
-                    }
-                }
-            };
-            this.flashbackVideo.addEventListener('timeupdate', this._timeupdateHandler);
-
-            this.flashbackVideo.play().catch(err => {
-                // Check if this flashback is still active
-                if (this._flashbackId !== currentFlashbackId) {
-                    return;
-                }
-                // Retry to 0
-                try {
-                    this.flashbackVideo.currentTime = 0;
-                    this.flashbackVideo.play().catch(err2 => {
-                        // Check again if this flashback is still active
-                        if (this._flashbackId !== currentFlashbackId) {
-                            return;
-                        }
-                        this.showMessage('Flashback failed', 'error');
-                        // If same retry fails, move to the next session
-                        finalizeFlashback('flashback-error-retry');
-                    });
-                } catch (e2) {
-                    // Check again if this flashback is still active
-                    if (this._flashbackId !== currentFlashbackId) {
-                        return;
-                    }
-                    this.showMessage('Flashback failed', 'error');
-                    finalizeFlashback('flashback-error');
-                }
-            });
-        };
-
-        // Also handle loading error
-        const onError = (e) => {
-            // Check if this flashback is still active
-            if (this._flashbackId !== sessionFlashbackId) {
-                return;
-            }
-            this.debugLogState('play:error', {
-                sessionId: session.id,
-                flashbackIndex: this.currentFlashbackIndex,
-                error: e?.message || e?.type || 'unknown',
-                readyState: this.flashbackVideo?.readyState,
-                networkState: this.flashbackVideo?.networkState
-            });
-            if (this._finalizeFlashback) {
-                this._finalizeFlashback('load-error');
-                return;
-            }
-            clearTimeout(metadataTimeout);
-            if (this._metadataTimeout === metadataTimeout) {
-                this._metadataTimeout = null;
-            }
-            if (this.flashbackVideo && this._onErrorHandler) {
-                this.flashbackVideo.removeEventListener('error', this._onErrorHandler);
-                this._onErrorHandler = null;
-            }
-            this._finalizeFlashback = null;
-            this.showMessage('Video loading error', 'error');
-            // Move to the next session
-            this.onSessionEnded(sessionFlashbackId);
-        };
-
-        this.flashbackVideo.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
-        this.flashbackVideo.addEventListener('error', onError, { once: true });
-        this._onErrorHandler = onError;
-    }
-
     // === INTERRUPTION/END OF PLAYBACK + RESUME RECORDING ===
-
-    onSessionEnded(flashbackId = null) { 
-        // Check if this flashback is still active (if flashbackId is provided)
-        // If flashbackId is provided and doesn't match the current _flashbackId, this flashback has been interrupted
-        if (flashbackId !== null && this._flashbackId !== flashbackId) {
-            // This flashback has been interrupted by a new flashback, ignore this call
-            return;
-        }
-        // If we're no longer in flashback, ignore it as well (additional safety)
-        if (this.state !== 'flashback') {
-            return;
-        }
-        this.currentFlashbackIndex++;
-        if (this.currentFlashbackIndex >= this.allSessions.length) {
-            try {
-                this.resumeRecordingAfterFlashback();
-            } catch (e) {
-            }
-        } else {
-            this.playCurrentFlashbackSession(0);
-        }
-    }
 
     stopFlashbackAndResumeRecording() {
         if (this.state === 'flashback') {
@@ -5446,14 +5421,12 @@ class FlashbackRecorder {
             this.currentReferencePosition = null;
             this._finalizeFlashback = null;
             this.updateDebugPanel(); // Update panel to remove highlight from segment
+            this.clearFlashbackMonitors();
+            this._detachFlashbackHandlers();
+            this._teardownMse();
             // Completely clean up the video element (flashbackVideo and videoPreview are the same reference)
             if (this.flashbackVideo) {
                 this.flashbackVideo.pause();
-                this.flashbackVideo.removeEventListener('ended', this.onSessionEnded);
-                if (this._timeupdateHandler) {
-                    this.flashbackVideo.removeEventListener('timeupdate', this._timeupdateHandler);
-                    this._timeupdateHandler = null;
-                }
                 this.flashbackVideo.src = '';
                 this.flashbackVideo.srcObject = null;
                 try {
@@ -5488,6 +5461,218 @@ class FlashbackRecorder {
         }
     }
 
+    // === CONFIG PANEL ===
+
+    initConfigPanel() {
+        // Apply saved mirror mode
+        this.applyMirrorMode();
+        if (this.configMirrorToggle) {
+            this.configMirrorToggle.checked = this.mirrorMode;
+            this.configMirrorToggle.addEventListener('change', () => {
+                this.mirrorMode = this.configMirrorToggle.checked;
+                this.applyMirrorMode();
+                this.saveSettings();
+            });
+        }
+
+        // Output device: setSinkId support detection
+        const supportsSinkId = typeof HTMLMediaElement.prototype.setSinkId === 'function';
+        if (this.configAudioOutputContent) {
+            if (supportsSinkId) {
+                const sel = document.createElement('select');
+                sel.id = 'configAudioOutputSelect';
+                sel.className = 'config-select';
+                this.configAudioOutputContent.appendChild(sel);
+                sel.addEventListener('change', () => {
+                    this.handleOutputDeviceChange(sel.value);
+                });
+            } else {
+                const info = document.createElement('p');
+                info.className = 'config-audio-info';
+                info.textContent = 'La sélection de la sortie audio n\'est pas disponible dans ce navigateur. Le son suit automatiquement la sortie par défaut de votre appareil.';
+                this.configAudioOutputContent.appendChild(info);
+            }
+        }
+
+        // Mic and camera selects
+        if (this.configMicSelect) {
+            this.configMicSelect.addEventListener('change', () => {
+                this.handleMicDeviceChange(this.configMicSelect.value);
+            });
+        }
+        if (this.configCameraSelect) {
+            this.configCameraSelect.addEventListener('change', () => {
+                this.handleCameraDeviceChange(this.configCameraSelect.value);
+            });
+        }
+
+        // Populate once permissions are likely granted (after getUserMedia in startRecording)
+        // Also attempt immediately in case we already have permission
+        this.refreshConfigPanelDevices();
+    }
+
+    openConfigPanel() {
+        if (!this.configPanel) return;
+        this.configPanel.classList.add('open');
+        // Refresh device list in case new devices were connected
+        this.refreshConfigPanelDevices();
+        // Attach camera preview
+        if (this.configCameraPreview && this.stream) {
+            this.configCameraPreview.srcObject = this.stream;
+        }
+        // Start vumeter
+        this.startVuMeter();
+    }
+
+    closeConfigPanel() {
+        if (!this.configPanel) return;
+        this.configPanel.classList.remove('open');
+        this.stopVuMeter();
+        if (this.configCameraPreview) {
+            this.configCameraPreview.srcObject = null;
+        }
+    }
+
+    async refreshConfigPanelDevices() {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            this._populateOutputSelect(devices.filter(d => d.kind === 'audiooutput'));
+            this._populateSelect(this.configMicSelect, devices.filter(d => d.kind === 'audioinput'), this.currentAudioInputDeviceId);
+            this._populateSelect(this.configCameraSelect, devices.filter(d => d.kind === 'videoinput'), null);
+        } catch (err) {
+            console.warn('Config panel: error enumerating devices', err);
+        }
+    }
+
+    _populateOutputSelect(outputDevices) {
+        const sel = document.getElementById('configAudioOutputSelect');
+        if (!sel) return;
+        const current = sel.value || this.currentAudioOutputDeviceId || 'default';
+        sel.innerHTML = '';
+        // "Default system" is always first
+        const defOpt = document.createElement('option');
+        defOpt.value = 'default';
+        defOpt.textContent = 'Défaut du système';
+        sel.appendChild(defOpt);
+        for (const d of outputDevices) {
+            if (d.deviceId === 'default') continue; // already covered above
+            const opt = document.createElement('option');
+            opt.value = d.deviceId;
+            opt.textContent = d.label || `Sortie ${sel.options.length}`;
+            sel.appendChild(opt);
+        }
+        sel.value = current;
+        if (!Array.from(sel.options).some(o => o.value === sel.value)) {
+            sel.value = 'default';
+        }
+    }
+
+    _populateSelect(selectEl, devices, currentId) {
+        if (!selectEl) return;
+        const prev = selectEl.value || currentId;
+        selectEl.innerHTML = '';
+        for (const d of devices) {
+            const opt = document.createElement('option');
+            opt.value = d.deviceId;
+            opt.textContent = d.label || `Périphérique ${selectEl.options.length + 1}`;
+            selectEl.appendChild(opt);
+        }
+        if (prev && Array.from(selectEl.options).some(o => o.value === prev)) {
+            selectEl.value = prev;
+        }
+    }
+
+    async handleOutputDeviceChange(deviceId) {
+        this.currentAudioOutputDeviceId = deviceId;
+        localStorage.setItem('preferredAudioOutputDeviceId', deviceId);
+        if (this.audioOutputMonitor) this.audioOutputMonitor.setCurrentDevice(deviceId);
+        await this.updateFlashbackVideoAudioOutput(deviceId);
+        this.audioKeepAlive.updateSinkId(deviceId);
+        const label = document.getElementById('configAudioOutputSelect')
+            ?.options[document.getElementById('configAudioOutputSelect').selectedIndex]?.text || deviceId;
+        this.showDeviceChangeOverlay(label, 'output');
+    }
+
+    async handleMicDeviceChange(deviceId) {
+        if (!deviceId || deviceId === this.currentAudioInputDeviceId) return;
+        const confirmed = window.confirm(
+            'Changer de microphone va redémarrer l\'enregistrement. Le buffer actuel sera perdu. Continuer ?'
+        );
+        if (!confirmed) {
+            // Revert select
+            if (this.configMicSelect) this.configMicSelect.value = this.currentAudioInputDeviceId || '';
+            return;
+        }
+        localStorage.setItem('preferredAudioInputDeviceId', deviceId);
+        this.stopFlashbackAndResumeRecording();
+    }
+
+    async handleCameraDeviceChange(deviceId) {
+        if (!deviceId) return;
+        const confirmed = window.confirm(
+            'Changer de caméra va redémarrer l\'enregistrement. Le buffer actuel sera perdu. Continuer ?'
+        );
+        if (!confirmed) return;
+        localStorage.setItem('preferredVideoDeviceId', deviceId);
+        this.stopFlashbackAndResumeRecording();
+    }
+
+    applyMirrorMode() {
+        if (!this.videoPreview) return;
+        this.videoPreview.style.transform = this.mirrorMode ? 'scaleX(-1)' : 'none';
+    }
+
+    startVuMeter() {
+        if (!this.stream || !this.configVuMeter) return;
+        try {
+            this.vuMeterAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            this.vuMeterAnalyser = this.vuMeterAudioCtx.createAnalyser();
+            this.vuMeterAnalyser.fftSize = 256;
+            this.vuMeterSource = this.vuMeterAudioCtx.createMediaStreamSource(this.stream);
+            this.vuMeterSource.connect(this.vuMeterAnalyser);
+            const data = new Uint8Array(this.vuMeterAnalyser.frequencyBinCount);
+            const canvas = this.configVuMeter;
+            const ctx = canvas.getContext('2d');
+            const draw = () => {
+                if (!this.vuMeterAnalyser) return;
+                this.vuMeterAnimId = requestAnimationFrame(draw);
+                this.vuMeterAnalyser.getByteFrequencyData(data);
+                const avg = data.reduce((a, b) => a + b, 0) / data.length;
+                const level = Math.min(avg / 128, 1);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const grad = ctx.createLinearGradient(0, 0, canvas.width, 0);
+                grad.addColorStop(0, '#10B981');
+                grad.addColorStop(0.7, '#F59E0B');
+                grad.addColorStop(1, '#EF4444');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, canvas.width * level, canvas.height);
+            };
+            draw();
+        } catch (e) {
+            console.warn('VuMeter: could not start', e);
+        }
+    }
+
+    stopVuMeter() {
+        if (this.vuMeterAnimId) {
+            cancelAnimationFrame(this.vuMeterAnimId);
+            this.vuMeterAnimId = null;
+        }
+        if (this.vuMeterSource) {
+            try { this.vuMeterSource.disconnect(); } catch (e) { /* noop */ }
+            this.vuMeterSource = null;
+        }
+        if (this.vuMeterAudioCtx) {
+            try { this.vuMeterAudioCtx.close(); } catch (e) { /* noop */ }
+            this.vuMeterAudioCtx = null;
+        }
+        this.vuMeterAnalyser = null;
+        if (this.configVuMeter) {
+            const ctx = this.configVuMeter.getContext('2d');
+            ctx.clearRect(0, 0, this.configVuMeter.width, this.configVuMeter.height);
+        }
+    }
+
     resumeRecordingAfterFlashback() {
         // Reset previous position tracking when resuming recording
         this.previousAbsoluteTime = null;
@@ -5496,6 +5681,11 @@ class FlashbackRecorder {
 
     getCurrentAbsoluteTime() {
         if (this.state === 'flashback' || this.state === 'flashbackPaused') {
+            // The flashback plays a single stitched MediaSource timeline; map its position back to
+            // absolute recording time.
+            if (this._mse && this.flashbackVideo) {
+                return this._mseToAbs(this.flashbackVideo.currentTime || 0);
+            }
             const session = this.allSessions?.[this.currentFlashbackIndex];
             const sessionStartAbs = session?.visibleStartAbs ?? session?.absoluteStart ?? this.visibleWindowStart ?? 0;
             const flashbackOffset = this.flashbackVideo?.currentTime || 0;
