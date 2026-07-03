@@ -1293,6 +1293,25 @@ class FlashbackRecorder {
         return { windowStart, windowEnd, windowDuration };
     }
 
+    // Width the green timeline bar should occupy, as a percentage of the track.
+    // The waveform and photo timeline always stretch the display window [windowStart, windowEnd]
+    // (windowEnd = max(maxDuration, recorded duration)) across their whole width. The green bar must
+    // fill exactly the fraction of that window covered by recorded content, so its right edge lines
+    // up with the end of the recorded content in the waveform, and its cursor/markers share the same
+    // time→pixel scale. This yields: a proportional bar (recorded / maxDuration) before the buffer is
+    // full, and a full bar once recording has reached/exceeded maxDuration.
+    getEffectiveBarWidthPercent() {
+        const { windowStart, windowDuration } = this.calculateVisibleWindow();
+        if (!(windowDuration > 0)) {
+            return 100;
+        }
+        const recordedEnd = (this.state === 'recording')
+            ? this.lifetimeRecordedDuration
+            : (this.visibleWindowEnd ?? this.lifetimeRecordedDuration);
+        const frac = (recordedEnd - windowStart) / windowDuration;
+        return Math.min(Math.max(frac * 100, 0), 100);
+    }
+
     renderWaveform() {
         if (!this.waveformCtx || !this.waveformCanvas || !this.showWaveform) return;
         
@@ -3524,27 +3543,12 @@ class FlashbackRecorder {
             return windowStart;
         }
 
-        let percent;
-        
-        if (isTimeline) {
-            // Timeline: calculate relative to effective green bar width
-            // Calculate the effective width of the green bar (same logic as updateTimeline)
-            const effectiveBarWidthPercent = this.maxDuration > 0 ? Math.min((windowDuration / this.maxDuration) * 100, 100) : 100;
-            const effectiveBarWidthPx = (effectiveBarWidthPercent / 100) * rect.width;
-
-            // Calculate percent relative to the effective width
-            if (x <= effectiveBarWidthPx) {
-                // Click on the green bar: calculate relative to the green bar
-                percent = effectiveBarWidthPx > 0 ? x / effectiveBarWidthPx : 0;
-            } else {
-                // Click on gray area: treat as 100% of the green bar
-                percent = 1.0;
-            }
-        } else {
-            // Waveform: use direct percentage of full width (always shows full window)
-            percent = rect.width > 0 ? x / rect.width : 0;
-            percent = Math.max(0, Math.min(1, percent)); // Clamp to [0, 1]
-        }
+        // Both the green timeline bar and the waveform now share the same time→pixel scale (the
+        // display window stretched across the full width), so a click maps the same way on either:
+        // the fraction of the full width is the fraction of the display window. A click in the gray
+        // area beyond the recorded content maps past the recording and is clamped by the caller.
+        let percent = rect.width > 0 ? x / rect.width : 0;
+        percent = Math.max(0, Math.min(1, percent)); // Clamp to [0, 1]
 
         // Calculate target time within the visible window
         const targetTime = windowStart + (percent * windowDuration);
@@ -5025,13 +5029,10 @@ class FlashbackRecorder {
         this.totalRecordedTime = Math.min(windowDuration, this.maxDuration);
         const markersPruned = this.pruneFlashbackMarkers(windowStart, windowEnd);
 
-        let progressPercent = this.maxDuration > 0 ? (windowDuration / this.maxDuration) * 100 : 0;
-        progressPercent = Math.min(Math.max(progressPercent, 0), 100);
-
         const currentAbsolute = this.getCurrentAbsoluteTime();
 
         // Update the green bar (progress)
-        const effectiveBarWidthPercent = Math.min(progressPercent, 100);
+        const effectiveBarWidthPercent = this.getEffectiveBarWidthPercent();
         this.timelineProgress.style.width = `${effectiveBarWidthPercent}%`;
 
         const windowStartDisplay = (isRecording || isFlashbackPaused)
