@@ -5135,9 +5135,14 @@ class FlashbackRecorder {
         }
         this.allSessions = [...sessions];
 
-        // (Re)build the MediaSource only when we don't already have a matching one (fresh flashback
-        // or the segment set changed). Repeated back/forward presses reuse it and just re-seek.
-        if (!this._mse || !this._mse.ready || this._mse.segCount !== sessions.length) {
+        // (Re)build the windowed MediaSource when there isn't a usable one, the segment set changed,
+        // or the requested time falls outside the currently-buffered run. Back/forward presses that
+        // stay inside the buffered run reuse it and just re-seek; larger jumps rebuild the window
+        // around the new target.
+        const needRebuild = !this._mse || !this._mse.ready
+            || this._mse.segCount !== sessions.length
+            || !this._fbTargetInRun(this._mse, timestamp);
+        if (needRebuild) {
             this.clearFlashbackMonitors();
             this._teardownMse();
             // Attach the video element up front: a MediaSource only fires 'sourceopen' once it is
@@ -5145,7 +5150,7 @@ class FlashbackRecorder {
             this.flashbackVideo = this.videoPreview;
             this.videoPreview.srcObject = null;
             this.videoPreview.muted = false;
-            const built = await this._buildFlashbackMediaSource(sessions);
+            const built = await this._buildFlashbackMediaSource(sessions, timestamp);
             if (this._flashbackId !== fbId) {
                 // A newer flashback superseded this one while we were building.
                 this._teardownMse(built);
@@ -5182,6 +5187,9 @@ class FlashbackRecorder {
         this.stopPhotoExtraction();
         this.stopPhotoTimelineRefresh();
 
+        // Keep the sliding window fed ahead of / evicted behind the play head for this flashback.
+        this._pumpFlashback(fbId);
+
         const tryPlay = () => this.flashbackVideo && this.flashbackVideo.play();
         Promise.resolve()
             .then(tryPlay)
@@ -5193,26 +5201,145 @@ class FlashbackRecorder {
             });
     }
 
-    // Build a MediaSource that concatenates every retained segment into one gapless timeline.
-    // Returns a context { mediaSource, objectUrl, sourceBuffer, segMap, segCount, totalMse,
-    // windowStartAbs, windowEndAbs, ready } or null if it could not be built.
-    async _buildFlashbackMediaSource(sessions) {
+    // Bounds for the on-demand buffered window. Appending every retained segment into one SourceBuffer
+    // overruns the browser's SourceBuffer memory quota (~150 MB) once the retained window gets large,
+    // which made flashback fail with QuotaExceededError on long sessions. We keep only a bounded run of
+    // consecutive segments around the play head instead.
+    static get FB_BYTE_BUDGET() { return 96 * 1024 * 1024; } // stay well under the ~150 MB SB quota
+    static get FB_PREFETCH_AHEAD() { return 12; } // seconds of lead to keep appended ahead of the head
+    static get FB_KEEP_BEHIND() { return 20; }    // seconds to retain behind the head before evicting
+
+    // Lazily build (and cache) the concatenated, self-contained WebM blob for one retained segment.
+    _fbEntryBlob(entry) {
+        if (!entry.blob) {
+            entry.blob = this.buildFlashbackSessionBlob(entry.session);
+        }
+        return entry.blob;
+    }
+
+    // Append the segment at entries[idx], extending the buffered run forward. Returns true on success.
+    // A synchronous QuotaExceededError from appendBuffer propagates to the caller (which evicts + retries).
+    async _fbAppend(ctx, idx) {
+        const entry = ctx.entries[idx];
+        const blob = this._fbEntryBlob(entry);
+        if (!blob || blob.size === 0) { ctx.hiIdx = idx; return false; }
+        const buffer = await blob.arrayBuffer();
+        const sb = ctx.sourceBuffer;
+        await new Promise((res, rej) => {
+            const onOk = () => { cleanup(); res(); };
+            const onErr = () => { cleanup(); rej(new Error('append-error')); };
+            const cleanup = () => { sb.removeEventListener('updateend', onOk); sb.removeEventListener('error', onErr); };
+            sb.addEventListener('updateend', onOk, { once: true });
+            sb.addEventListener('error', onErr, { once: true });
+            sb.appendBuffer(buffer); // may throw QuotaExceededError synchronously
+        });
+        const mseStart = ctx.mseCursor;
+        const mseEnd = sb.buffered.length ? sb.buffered.end(sb.buffered.length - 1) : mseStart;
+        ctx.segMap.push({ idx, absStart: entry.absStart, absEnd: entry.absEnd, mseStart, mseEnd });
+        ctx.mseCursor = mseEnd;
+        ctx.totalMse = mseEnd;
+        ctx.bytesBuffered += blob.size;
+        ctx.hiIdx = idx;
+        return true;
+    }
+
+    // Drop the oldest buffered segment(s) to reclaim memory. Never evicts within FB_KEEP_BEHIND of the
+    // play head, and always leaves at least one segment buffered.
+    async _fbEvictFront(ctx, playAbs) {
+        while (ctx.bytesBuffered > FlashbackRecorder.FB_BYTE_BUDGET
+               && ctx.segMap.length > 1
+               && ctx.segMap[0].absEnd < playAbs - FlashbackRecorder.FB_KEEP_BEHIND) {
+            const seg = ctx.segMap[0];
+            const sb = ctx.sourceBuffer;
+            try {
+                await new Promise((res) => {
+                    sb.addEventListener('updateend', res, { once: true });
+                    sb.remove(seg.mseStart, seg.mseEnd);
+                });
+            } catch (e) { break; }
+            const entry = ctx.entries[seg.idx];
+            ctx.bytesBuffered -= (entry.blob ? entry.blob.size : 0);
+            entry.blob = null; // free the concatenated blob
+            ctx.loIdx = seg.idx + 1;
+            ctx.segMap.shift();
+        }
+    }
+
+    // Is the absolute time t inside the currently-buffered run?
+    _fbTargetInRun(ctx, t) {
+        return !!(ctx && ctx.ready && ctx.segMap.length > 0
+            && t >= ctx.segMap[0].absStart - 0.05
+            && t <= ctx.segMap[ctx.segMap.length - 1].absEnd + 0.05);
+    }
+
+    // Maintain the buffered window for the active flashback: prefetch ahead of the play head, evict
+    // behind, and finalise the stream once the last segment is buffered. Re-entrancy-guarded and kicked
+    // from the timeupdate/waiting handlers; every step is gated on fbId so a superseded flashback stops.
+    async _pumpFlashback(fbId) {
+        const ctx = this._mse;
+        if (!ctx || ctx._pumping || this._flashbackId !== fbId) return;
+        ctx._pumping = true;
+        try {
+            const video = this.flashbackVideo;
+            while (this._flashbackId === fbId && ctx.ready) {
+                const headMse = video ? (video.currentTime || 0) : 0;
+                const playAbs = video ? this._mseToAbs(headMse) : ctx.windowStartAbs;
+                await this._fbEvictFront(ctx, playAbs);
+                if (this._flashbackId !== fbId) break;
+                const needAhead = (ctx.mseCursor - headMse) < FlashbackRecorder.FB_PREFETCH_AHEAD
+                                  || ctx.bytesBuffered < FlashbackRecorder.FB_BYTE_BUDGET;
+                if (ctx.hiIdx < ctx.lastIdx && needAhead
+                    && ctx.bytesBuffered < FlashbackRecorder.FB_BYTE_BUDGET) {
+                    try {
+                        await this._fbAppend(ctx, ctx.hiIdx + 1);
+                    } catch (e) {
+                        // Out of SourceBuffer room: drop behind the head and try again next tick.
+                        await this._fbEvictFront(ctx, playAbs);
+                        break;
+                    }
+                    continue;
+                }
+                if (ctx.hiIdx >= ctx.lastIdx && !ctx.endedStream) {
+                    try { ctx.mediaSource.endOfStream(); } catch (e) { /* noop */ }
+                    ctx.endedStream = true;
+                }
+                break;
+            }
+        } finally {
+            ctx._pumping = false;
+        }
+    }
+
+    // Build a MediaSource holding a bounded window of segments around targetAbs: one segment behind
+    // (smooth small rewinds) then forward until the byte budget is hit. The pump keeps it fed/evicted
+    // as playback proceeds. Returns a context or null if even the minimal window could not be built.
+    async _buildFlashbackMediaSource(sessions, targetAbs = 0) {
         const entries = sessions
-            .map(session => ({ session, blob: this.buildFlashbackSessionBlob(session) }))
-            .filter(entry => entry.blob && entry.blob.size > 0);
+            .filter(s => s && Array.isArray(s.chunks) && s.chunks.length > 0)
+            .map(s => ({
+                session: s,
+                absStart: s.absoluteStart ?? s.visibleStartAbs ?? 0,
+                absEnd: s.absoluteEnd ?? s.visibleEndAbs ?? (s.absoluteStart ?? 0),
+                blob: null
+            }))
+            .sort((a, b) => a.absStart - b.absStart);
         if (entries.length === 0) {
             return null;
         }
-        const mime = entries[0].blob.type || this.activeMimeType || 'video/webm';
+        const mime = entries[0].session.mimeType || this.activeMimeType || 'video/webm';
         if (!(window.MediaSource && MediaSource.isTypeSupported(mime))) {
             return null;
         }
         const mediaSource = new MediaSource();
         const objectUrl = URL.createObjectURL(mediaSource);
         const ctx = {
-            mediaSource, objectUrl, sourceBuffer: null,
-            segMap: [], segCount: sessions.length, totalMse: 0,
-            windowStartAbs: 0, windowEndAbs: 0, ready: false
+            mediaSource, objectUrl, sourceBuffer: null, mime,
+            entries, segCount: sessions.length, lastIdx: entries.length - 1,
+            loIdx: 0, hiIdx: -1, segMap: [], mseCursor: 0, bytesBuffered: 0,
+            totalMse: 0, endedStream: false, _pumping: false,
+            windowStartAbs: entries[0].absStart,
+            windowEndAbs: entries[entries.length - 1].absEnd,
+            ready: false
         };
 
         // Bind the MediaSource to the video element so 'sourceopen' fires.
@@ -5220,41 +5347,43 @@ class FlashbackRecorder {
         this.videoPreview.src = objectUrl;
         try { this.videoPreview.load(); } catch (e) { /* noop */ }
 
-        await new Promise((resolve) => {
-            const timeout = setTimeout(resolve, 5000); // give up rather than hang
-            mediaSource.addEventListener('sourceopen', async () => {
-                clearTimeout(timeout);
-                try {
-                    const sb = mediaSource.addSourceBuffer(mime);
-                    sb.mode = 'sequence'; // place each segment right after the previous one
-                    ctx.sourceBuffer = sb;
-                    let cursor = 0;
-                    for (const { session, blob } of entries) {
-                        const buffer = await blob.arrayBuffer();
-                        await new Promise((res, rej) => {
-                            sb.addEventListener('updateend', res, { once: true });
-                            sb.addEventListener('error', () => rej(new Error('append-error')), { once: true });
-                            sb.appendBuffer(buffer);
-                        });
-                        const mseEnd = sb.buffered.length ? sb.buffered.end(sb.buffered.length - 1) : cursor;
-                        // Map the full segment span (preroll + visible) so playback time lines up with
-                        // absolute recording time across the whole window.
-                        const absStart = session.absoluteStart ?? session.visibleStartAbs ?? 0;
-                        const absEnd = session.absoluteEnd ?? session.visibleEndAbs ?? absStart;
-                        ctx.segMap.push({ absStart, absEnd, mseStart: cursor, mseEnd });
-                        cursor = mseEnd;
-                    }
-                    try { mediaSource.endOfStream(); } catch (e) { /* noop */ }
-                    ctx.totalMse = cursor;
-                    ctx.windowStartAbs = ctx.segMap[0].absStart;
-                    ctx.windowEndAbs = ctx.segMap[ctx.segMap.length - 1].absEnd;
-                    ctx.ready = true;
-                } catch (e) {
-                    // leave ctx.ready false
-                }
-                resolve();
-            }, { once: true });
+        const opened = await new Promise((resolve) => {
+            const timeout = setTimeout(() => resolve(false), 5000); // give up rather than hang
+            mediaSource.addEventListener('sourceopen', () => { clearTimeout(timeout); resolve(true); }, { once: true });
         });
+        if (!opened) {
+            try { URL.revokeObjectURL(objectUrl); } catch (e) { /* noop */ }
+            return null;
+        }
+
+        try {
+            const sb = mediaSource.addSourceBuffer(mime);
+            sb.mode = 'sequence'; // place each segment right after the previous one
+            ctx.sourceBuffer = sb;
+
+            let targetIdx = entries.findIndex(e => targetAbs <= e.absEnd + 0.05);
+            if (targetIdx < 0) targetIdx = entries.length - 1;
+            const startIdx = Math.max(0, targetIdx - 1); // one segment of rewind headroom
+
+            // Mandatory: cover startIdx..targetIdx so the requested position is immediately playable.
+            for (let i = startIdx; i <= targetIdx; i++) {
+                await this._fbAppend(ctx, i);
+            }
+            ctx.ready = ctx.segMap.length > 0;
+            // Prefetch forward up to the byte budget; the pump extends further during playback.
+            let i = targetIdx + 1;
+            while (i <= ctx.lastIdx && ctx.bytesBuffered < FlashbackRecorder.FB_BYTE_BUDGET) {
+                await this._fbAppend(ctx, i);
+                i++;
+            }
+            ctx.loIdx = ctx.segMap.length ? ctx.segMap[0].idx : 0;
+            if (ctx.hiIdx >= ctx.lastIdx) {
+                try { mediaSource.endOfStream(); } catch (e) { /* noop */ }
+                ctx.endedStream = true;
+            }
+        } catch (e) {
+            // A QuotaExceededError this early means even the minimal window didn't fit — bail out.
+        }
 
         if (!ctx.ready) {
             try { URL.revokeObjectURL(objectUrl); } catch (e) { /* noop */ }
@@ -5263,13 +5392,16 @@ class FlashbackRecorder {
         return ctx;
     }
 
-    // Convert an absolute recording timestamp to a position on the MediaSource timeline.
+    // Convert an absolute recording timestamp to a position on the MediaSource timeline. Operates on
+    // the currently-buffered run; callers ensure the target lies within it before seeking.
     _absToMse(absTime) {
         const ctx = this._mse;
         if (!ctx || ctx.segMap.length === 0) {
             return 0;
         }
-        const clamped = Math.max(ctx.windowStartAbs, Math.min(absTime, ctx.windowEndAbs));
+        const runStart = ctx.segMap[0].absStart;
+        const runEnd = ctx.segMap[ctx.segMap.length - 1].absEnd;
+        const clamped = Math.max(runStart, Math.min(absTime, runEnd));
         for (const seg of ctx.segMap) {
             if (clamped <= seg.absEnd) {
                 const absSpan = seg.absEnd - seg.absStart;
@@ -5277,10 +5409,10 @@ class FlashbackRecorder {
                 return seg.mseStart + Math.max(0, Math.min(1, frac)) * (seg.mseEnd - seg.mseStart);
             }
         }
-        return ctx.totalMse;
+        return ctx.mseCursor;
     }
 
-    // Convert a MediaSource timeline position back to an absolute recording timestamp.
+    // Convert a MediaSource timeline position back to an absolute recording timestamp (loaded run).
     _mseToAbs(mseTime) {
         const ctx = this._mse;
         if (!ctx || ctx.segMap.length === 0) {
@@ -5293,17 +5425,19 @@ class FlashbackRecorder {
                 return seg.absStart + Math.max(0, Math.min(1, frac)) * (seg.absEnd - seg.absStart);
             }
         }
-        return ctx.windowEndAbs;
+        return ctx.segMap[ctx.segMap.length - 1].absEnd;
     }
 
-    // Keep currentFlashbackIndex roughly aligned with the played position (debug panel highlight).
+    // Keep currentFlashbackIndex aligned with the played position (debug panel highlight). Indexes the
+    // full entry list, not just the buffered run.
     _syncFlashbackIndex(absTime) {
         const ctx = this._mse;
         if (!ctx) return;
-        for (let i = 0; i < ctx.segMap.length; i++) {
-            if (absTime <= ctx.segMap[i].absEnd) { this.currentFlashbackIndex = i; return; }
+        const entries = ctx.entries || [];
+        for (let i = 0; i < entries.length; i++) {
+            if (absTime <= entries[i].absEnd) { this.currentFlashbackIndex = i; return; }
         }
-        this.currentFlashbackIndex = Math.max(0, ctx.segMap.length - 1);
+        this.currentFlashbackIndex = Math.max(0, entries.length - 1);
     }
 
     // Attach the timeupdate/ended/error handlers for the flashback identified by fbId.
@@ -5317,6 +5451,7 @@ class FlashbackRecorder {
             this._syncFlashbackIndex(this._mseToAbs(video.currentTime || 0));
             this.updateTimeline();
             this.updateAllPlaybackPositions();
+            this._pumpFlashback(fbId); // feed the window ahead / evict behind as playback advances
         };
         this._onEndedHandler = () => {
             if (this._flashbackId !== fbId) return;
@@ -5328,9 +5463,15 @@ class FlashbackRecorder {
             this.showMessage('Flashback playback error', 'error');
             this.resumeRecordingAfterFlashback();
         };
+        // If playback outruns the buffered window, feed it more rather than stalling.
+        this._onWaitingHandler = () => {
+            if (this._flashbackId !== fbId) return;
+            this._pumpFlashback(fbId);
+        };
         video.addEventListener('timeupdate', this._timeupdateHandler);
         video.addEventListener('ended', this._onEndedHandler);
         video.addEventListener('error', this._onErrorHandler);
+        video.addEventListener('waiting', this._onWaitingHandler);
     }
 
     _detachFlashbackHandlers() {
@@ -5339,10 +5480,12 @@ class FlashbackRecorder {
             if (this._timeupdateHandler) video.removeEventListener('timeupdate', this._timeupdateHandler);
             if (this._onEndedHandler) video.removeEventListener('ended', this._onEndedHandler);
             if (this._onErrorHandler) video.removeEventListener('error', this._onErrorHandler);
+            if (this._onWaitingHandler) video.removeEventListener('waiting', this._onWaitingHandler);
         }
         this._timeupdateHandler = null;
         this._onEndedHandler = null;
         this._onErrorHandler = null;
+        this._onWaitingHandler = null;
     }
 
     // Tear down a MediaSource context and release its object URL.
@@ -5354,6 +5497,7 @@ class FlashbackRecorder {
             }
         } catch (e) { /* noop */ }
         try { URL.revokeObjectURL(ctx.objectUrl); } catch (e) { /* noop */ }
+        if (ctx.entries) ctx.entries.forEach(e => { e.blob = null; }); // free windowed segment blobs
         if (ctx === this._mse) {
             this._mse = null;
         }
