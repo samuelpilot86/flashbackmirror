@@ -1995,7 +1995,6 @@ class FlashbackRecorder {
             hasExistingFrames: this.photoFrames.length > 0,
             currentSessionChunksCount: this.currentSessionChunks ? this.currentSessionChunks.length : 0,
             finalizedSessionsCount: this.sessionMap ? this.sessionMap.size : 0,
-            finalizedSessionsChunksCount: this.getFinalizedSessionsChunksCount(),
             photoFramesLength: this.photoFrames.length,
             photoExtractionActive: this.photoExtractionActive
         });
