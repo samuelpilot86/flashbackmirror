@@ -1,6 +1,21 @@
 // Set to true to show the debug (Buffer Analysis) panel
 const SHOW_DEBUG_PANEL = false;
 
+// Logging bridge for the audio classes, which run outside FlashbackRecorder.
+// Falls back to a no-op until the recorder exists, so audio never depends on logging.
+function audioDlog(event, data = {}) {
+    try {
+        window.flashbackRecorder?.dlog(event, data);
+    } catch (e) { /* logging must never break audio */ }
+}
+
+// Audio output devices are long hashes; keep logs readable and free of full IDs.
+function shortDeviceId(id) {
+    if (!id) return '(none)';
+    if (id === 'default' || id === 'communications') return id;
+    return String(id).slice(0, 8);
+}
+
 /**
  * AudioKeepAlive - Prevents audio devices from going to sleep
  * Uses two approaches in parallel:
@@ -57,8 +72,20 @@ class AudioKeepAlive {
                 const sinkId = (outputDeviceId === 'default') ? '' : outputDeviceId;
                 this.audioEl.setSinkId(sinkId).catch(err => {
                     console.warn('AudioKeepAlive: setSinkId failed', err);
+                    audioDlog('keepalive:sink-fail', { device: shortDeviceId(outputDeviceId), error: err?.name || String(err) });
                 });
             }
+
+            // The context suspending mid-session is a strong hint the output went away.
+            this.audioContext.addEventListener('statechange', () => {
+                audioDlog('keepalive:context-state', { state: this.audioContext?.state });
+            });
+            // A stalled/errored keep-alive element means the sink stopped accepting audio.
+            this.audioEl.addEventListener('stalled', () => audioDlog('keepalive:el-stalled', {}));
+            this.audioEl.addEventListener('error', () => {
+                audioDlog('keepalive:el-error', { code: this.audioEl?.error?.code || null });
+            });
+            this.audioEl.addEventListener('pause', () => audioDlog('keepalive:el-paused', {}));
 
             // APPROACH 1: Create periodic keep-alive signal
             this.keepAliveInterval = setInterval(() => {
@@ -82,6 +109,13 @@ class AudioKeepAlive {
             this.checkAndResume();
 
             this.isActive = true;
+            audioDlog('keepalive:start', {
+                device: shortDeviceId(outputDeviceId),
+                freqHz: this.frequency,
+                gain: this.gain,
+                everyMs: this.intervalDuration,
+                pulseMs: this.signalDuration
+            });
             console.log(`AudioKeepAlive: Started → device "${outputDeviceId}" (Approach 1 + Approach 2)`);
         } catch (error) {
             console.warn('AudioKeepAlive: Not available', error);
@@ -243,6 +277,8 @@ class AudioOutputMonitor {
         this.deviceChangeListener = null;
         this.isActive = false;
         this.previousDevices = new Set(); // Set of previously detected device IDs
+        this.deviceLabels = new Map(); // deviceId → label, so removals can still be named
+        this.hasEnumeratedOnce = false; // First enumeration is logged as an inventory, not as changes
         this.currentDeviceId = null; // Currently used device ID (if setSinkId is used)
         this.checkIntervalDuration = 2000; // Check every 2 seconds
         this.noDeviceAlertId = null; // ID of the "no device" alert (for permanent display)
@@ -285,6 +321,27 @@ class AudioOutputMonitor {
             
             const currentDeviceIds = new Set(audioOutputDevices.map(d => d.deviceId));
 
+            // Log only transitions: this polls every 2s and would otherwise flood the ring buffer.
+            if (!this.hasEnumeratedOnce) {
+                audioDlog('audio:devices-initial', {
+                    outputs: audioOutputDevices.map(d => `${shortDeviceId(d.deviceId)}:${d.label || '(no label)'}`)
+                });
+                this.hasEnumeratedOnce = true;
+            } else {
+                const added = audioOutputDevices.filter(d => !this.previousDevices.has(d.deviceId));
+                added.forEach(d => audioDlog('audio:device-added', {
+                    device: shortDeviceId(d.deviceId), label: d.label || '(no label)'
+                }));
+                const removedIds = [...this.previousDevices].filter(id => !currentDeviceIds.has(id));
+                removedIds.forEach(id => audioDlog('audio:device-removed', {
+                    device: shortDeviceId(id),
+                    label: this.deviceLabels?.get(id) || '(unknown)',
+                    wasCurrent: id === this.currentDeviceId
+                }));
+            }
+            // Remember labels so a removal can still be named after the device is gone.
+            this.deviceLabels = new Map(audioOutputDevices.map(d => [d.deviceId, d.label || '(no label)']));
+
             // Check if no devices are available
             if (audioOutputDevices.length === 0) {
                 this.handleNoDevicesAvailable();
@@ -293,6 +350,7 @@ class AudioOutputMonitor {
 
             // Remove "no device" alert if devices are now available
             if (this.noDeviceAlertId) {
+                audioDlog('audio:devices-restored', { count: audioOutputDevices.length });
                 this.flashbackRecorder.removeAlert(this.noDeviceAlertId);
                 this.noDeviceAlertId = null;
             }
@@ -300,6 +358,7 @@ class AudioOutputMonitor {
             // Check if current device (if set) is still available
             if (this.currentDeviceId && !currentDeviceIds.has(this.currentDeviceId)) {
                 console.log('AudioOutputMonitor: Current device no longer available, switching to default');
+                audioDlog('audio:current-device-lost', { device: shortDeviceId(this.currentDeviceId) });
                 await this.switchToDefaultDevice();
             }
 
@@ -313,6 +372,7 @@ class AudioOutputMonitor {
     handleNoDevicesAvailable() {
         // Only show alert if not already showing
         if (!this.noDeviceAlertId) {
+            audioDlog('audio:no-devices', { previousCount: this.previousDevices.size });
             this.noDeviceAlertId = this.flashbackRecorder.addAlert(
                 'No audio device available. Please connect an audio device.',
                 'error'
@@ -373,6 +433,7 @@ class AudioOutputMonitor {
 
             // Update current device ID
             this.currentDeviceId = defaultDeviceId || null;
+            audioDlog('audio:switched-to-default', { device: shortDeviceId(defaultDeviceId) });
 
             // Notify user of switch
             this.flashbackRecorder.addAlert(
@@ -381,6 +442,7 @@ class AudioOutputMonitor {
             );
         } catch (error) {
             console.warn('AudioOutputMonitor: Error switching to default device', error);
+            audioDlog('audio:switch-failed', { error: error?.name || String(error) });
         }
     }
 
@@ -3941,6 +4003,15 @@ class FlashbackRecorder {
                 }
             } else if (this.currentAudioOutputDeviceId === 'default') {
                 // Re-apply on every devicechange so routing stays current after BT connect/disconnect.
+                // Log when the OS default actually moved (e.g. a BT speaker connecting or dropping).
+                if (defaultOutputDeviceId !== this._lastDefaultOutputId) {
+                    this.dlog('audio:default-output-changed', {
+                        from: shortDeviceId(this._lastDefaultOutputId),
+                        to: shortDeviceId(defaultOutputDeviceId),
+                        label: defaultOutputDevice?.label || '(no label)'
+                    });
+                    this._lastDefaultOutputId = defaultOutputDeviceId;
+                }
                 await this.updateFlashbackVideoAudioOutput('default');
             }
 
