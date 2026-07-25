@@ -173,16 +173,33 @@ body {
 }
 
 .btn {
-    padding: 12px 24px;
+    padding: 8px 24px;
     border: none;
     border-radius: 8px;
     font-size: 16px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+    /* Stacked: label on top, keyboard shortcut underneath */
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 1px;
+    line-height: 1.2;
+}
+
+.btn-label {
+    display: block;
+}
+
+/* Keyboard shortcut hint under each control's label */
+.btn-key {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    opacity: 0.7;
+    letter-spacing: 0.2px;
 }
 
 .btn-primary {
@@ -415,7 +432,7 @@ body {
     background-position: center;
     border-right: 1px solid rgba(0, 0, 0, 0.1);
     transition: opacity 0.2s;
-    pointer-events: none; /* Permet aux clics de passer à travers pour atteindre le conteneur parent */
+    pointer-events: none; /* Lets clicks pass through to reach the parent container */
 }
 
 .photo-timeline-position {
@@ -709,6 +726,196 @@ body {
 
 .config-field--row .config-label {
     margin-bottom: 0;
+}
+
+.config-label--icon {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.config-label-icon {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    color: #6B7280;
+}
+
+/* Troubleshooting action button in the config panel */
+.config-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    width: 100%;
+    padding: 9px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    color: #374151;
+    background: white;
+    border: 1px solid #D1D5DB;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.config-action-btn:hover {
+    background: #F3F4F6;
+    border-color: #9CA3AF;
+}
+
+.config-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #9CA3AF;
+    line-height: 1.4;
+}
+
+/* === Debugging Logs Modal === */
+.logs-modal {
+    position: fixed;
+    inset: 0;
+    /* Above the config panel, the onboarding overlay and the focus overlay: whenever it is shown it
+       is the thing the user is meant to be looking at. */
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.logs-modal[hidden] {
+    display: none;
+}
+
+.logs-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+}
+
+.logs-modal-dialog {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 760px;
+    max-height: 82vh;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+}
+
+.logs-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+.logs-modal-header h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1E293B;
+}
+
+.logs-modal-close {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    color: #6B7280;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.logs-modal-close:hover {
+    background: #F3F4F6;
+    color: #1E293B;
+}
+
+.logs-modal-status {
+    padding: 9px 16px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #16A34A;
+    background: #F0FDF4;
+    border-bottom: 1px solid #DCFCE7;
+}
+
+.logs-modal-status--warn {
+    color: #B45309;
+    background: #FFFBEB;
+    border-bottom-color: #FDE68A;
+}
+
+.logs-modal-status--crash {
+    color: #DC2626;
+    background: #FEF2F2;
+    border-bottom-color: #FECACA;
+}
+
+.logs-modal-text {
+    flex: 1;
+    min-height: 220px;
+    margin: 0;
+    padding: 12px 16px;
+    font-family: 'Courier New', monospace;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: #1E293B;
+    background: #F9FAFB;
+    border: none;
+    resize: none;
+    white-space: pre;
+    overflow: auto;
+}
+
+.logs-modal-text:focus {
+    outline: none;
+}
+
+.logs-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 12px 16px;
+    border-top: 1px solid #E5E7EB;
+    background: white;
+}
+
+.logs-btn {
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    color: #374151;
+    background: white;
+    border: 1px solid #D1D5DB;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.logs-btn:hover {
+    background: #F3F4F6;
+}
+
+.logs-btn--primary {
+    color: white;
+    background: #2563EB;
+    border-color: #2563EB;
+}
+
+.logs-btn--primary:hover {
+    background: #1D4ED8;
 }
 
 .config-select {

@@ -22,7 +22,7 @@
 
         <!-- Timeline -->
         <div class="timeline-container" id="timelineContainer">
-            <!-- Timestamps en haut -->
+            <!-- Timestamps on top -->
             <div class="timeline-time-display">
                 <div class="timeline-time-display-main">
                     <span id="timeStart">0:00</span>
@@ -45,11 +45,11 @@
             <!-- Photo Timeline -->
             <div class="photo-timeline-container" id="photoTimelineContainer">
                 <div class="photo-timeline-scroll" id="photoTimelineScroll">
-                    <!-- Miniatures générées dynamiquement -->
+                    <!-- Thumbnails generated dynamically -->
                     <div class="photo-timeline-position" id="photoTimelinePosition" style="display: none;"></div>
                 </div>
             </div>
-            <!-- Total record en bas -->
+            <!-- Total record at the bottom -->
             <div class="timeline-time-display">
                 <span id="timeLifetime" class="timeline-lifetime" style="display: none;">Total 0s</span>
             </div>
@@ -62,12 +62,12 @@
         <div class="bottom-controls-row">
             <!-- Controls -->
             <div class="controls">
-                <button class="btn btn-danger" id="shiftBtn">Stop</button>
-                <button class="btn btn-secondary" id="flashbackBtn" disabled>Flashback ←</button>
-                <button class="btn btn-secondary" id="forwardBtn" disabled>Forward →</button>
-                <button class="btn btn-secondary" id="addMarkerBtn" disabled>Mark ⏱</button>
-                <button class="btn btn-secondary" id="prevMarkerBtn" disabled>Marker ↑</button>
-                <button class="btn btn-secondary" id="nextMarkerBtn" disabled>Marker ↓</button>
+                <button class="btn btn-danger" id="shiftBtn"><span class="btn-label">Stop</span><span class="btn-key">[Space]</span></button>
+                <button class="btn btn-secondary" id="flashbackBtn" disabled><span class="btn-label">Flashback</span><span class="btn-key">[←]</span></button>
+                <button class="btn btn-secondary" id="forwardBtn" disabled><span class="btn-label">Forward</span><span class="btn-key">[→]</span></button>
+                <button class="btn btn-secondary" id="addMarkerBtn" disabled><span class="btn-label">Mark ⏱</span><span class="btn-key">[Shift]</span></button>
+                <button class="btn btn-secondary" id="prevMarkerBtn" disabled><span class="btn-label">Marker ↑</span><span class="btn-key">[↑]</span></button>
+                <button class="btn btn-secondary" id="nextMarkerBtn" disabled><span class="btn-label">Marker ↓</span><span class="btn-key">[↓]</span></button>
             </div>
 
         </div>
@@ -110,7 +110,7 @@
                         <span class="debug-value" id="debugChunkCount">0</span>
                     </div>
                     <div class="debug-summary-item">
-                        <span class="debug-label">Tampon:</span>
+                        <span class="debug-label">Buffer:</span>
                         <span class="debug-value" id="debugBufferDuration">0.0s</span>
                     </div>
             </div>
@@ -118,38 +118,38 @@
     </div>
 
     <!-- Config Panel Toggle -->
-    <button class="config-panel-toggle" id="configPanelToggle" aria-label="Ouvrir la configuration">⚙</button>
+    <button class="config-panel-toggle" id="configPanelToggle" aria-label="Open configuration">⚙</button>
 
     <!-- Config Panel -->
     <div class="config-panel" id="configPanel">
         <div class="config-panel-header">
             <h3>Configuration</h3>
-            <button class="config-panel-close" id="configPanelClose" aria-label="Fermer">✕</button>
+            <button class="config-panel-close" id="configPanelClose" aria-label="Close">✕</button>
         </div>
         <div class="config-panel-body">
-            <!-- Périphériques -->
+            <!-- Devices -->
             <div class="config-section">
-                <div class="config-section-title">Périphériques</div>
+                <div class="config-section-title">Devices</div>
                 <div class="config-field">
                     <label class="config-label">Microphone</label>
                     <select id="configMicSelect" class="config-select"></select>
                     <canvas id="configVuMeter" class="config-vumeter" width="240" height="10"></canvas>
                 </div>
                 <div class="config-field">
-                    <label class="config-label">Caméra</label>
+                    <label class="config-label">Camera</label>
                     <select id="configCameraSelect" class="config-select"></select>
                     <video id="configCameraPreview" class="config-camera-preview" autoplay muted playsinline></video>
                 </div>
                 <div class="config-field">
-                    <label class="config-label">Sortie audio</label>
+                    <label class="config-label">Audio output</label>
                     <div id="configAudioOutputContent"></div>
                 </div>
             </div>
-            <!-- Enregistrement -->
+            <!-- Recording -->
             <div class="config-section">
-                <div class="config-section-title">Enregistrement</div>
+                <div class="config-section-title">Recording</div>
                 <div class="config-field">
-                    <label class="config-label">Durée maximale d'enregistrement</label>
+                    <label class="config-label">Maximum recording duration</label>
                     <div class="duration-control">
                         <input type="range" id="durationRange" min="1" max="3600" value="600">
                         <input type="number" id="durationValue" min="1" max="3600" value="600">
@@ -159,11 +159,47 @@
             </div>
             <!-- Affichage -->
             <div class="config-section">
-                <div class="config-section-title">Affichage</div>
+                <div class="config-section-title">Display</div>
                 <div class="config-field config-field--row">
-                    <label class="config-label" for="configMirrorToggle">Mode miroir</label>
+                    <label class="config-label config-label--icon" for="configMirrorToggle">
+                        <svg class="config-label-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3"/>
+                            <path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/>
+                            <path d="M12 2v2M12 8v2M12 14v2M12 20v2"/>
+                        </svg>
+                        Mirror while recording
+                    </label>
                     <input type="checkbox" id="configMirrorToggle" class="config-toggle">
                 </div>
+            </div>
+            <!-- Troubleshooting -->
+            <div class="config-section">
+                <div class="config-section-title">Troubleshooting</div>
+                <button type="button" class="config-action-btn" id="debugLogsBtn">
+                    <svg class="config-label-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <path d="M14 2v6h6"/>
+                        <path d="M8 13h8M8 17h5"/>
+                    </svg>
+                    Debugging logs
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debugging Logs Modal -->
+    <div class="logs-modal" id="logsModal" hidden>
+        <div class="logs-modal-backdrop" id="logsModalBackdrop"></div>
+        <div class="logs-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="logsModalTitle">
+            <div class="logs-modal-header">
+                <h3 id="logsModalTitle">Debugging logs</h3>
+                <button type="button" class="logs-modal-close" id="logsModalClose" aria-label="Close">✕</button>
+            </div>
+            <div class="logs-modal-status" id="logsModalStatus"></div>
+            <textarea class="logs-modal-text" id="logsModalText" readonly spellcheck="false"></textarea>
+            <div class="logs-modal-footer">
+                <button type="button" class="logs-btn" id="logsCopyBtn">Copy again</button>
+                <button type="button" class="logs-btn logs-btn--primary" id="logsCloseBtn">Close</button>
             </div>
         </div>
     </div>

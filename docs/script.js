@@ -314,7 +314,7 @@ class AudioOutputMonitor {
         // Only show alert if not already showing
         if (!this.noDeviceAlertId) {
             this.noDeviceAlertId = this.flashbackRecorder.addAlert(
-                'Aucun périphérique audio disponible. Veuillez connecter un périphérique audio.',
+                'No audio device available. Please connect an audio device.',
                 'error'
             );
             // Make it permanent by clearing the timeout
@@ -376,7 +376,7 @@ class AudioOutputMonitor {
 
             // Notify user of switch
             this.flashbackRecorder.addAlert(
-                'Sortie audio basculée vers le périphérique par défaut',
+                'Audio output switched to the default device',
                 'info'
             );
         } catch (error) {
@@ -476,6 +476,14 @@ class FlashbackRecorder {
         this.configVuMeter = document.getElementById('configVuMeter');
         this.configCameraPreview = document.getElementById('configCameraPreview');
         this.configMirrorToggle = document.getElementById('configMirrorToggle');
+        this.debugLogsBtn = document.getElementById('debugLogsBtn');
+        this.logsModal = document.getElementById('logsModal');
+        this.logsModalBackdrop = document.getElementById('logsModalBackdrop');
+        this.logsModalClose = document.getElementById('logsModalClose');
+        this.logsModalStatus = document.getElementById('logsModalStatus');
+        this.logsModalText = document.getElementById('logsModalText');
+        this.logsCopyBtn = document.getElementById('logsCopyBtn');
+        this.logsCloseBtn = document.getElementById('logsCloseBtn');
         this.debugSegmentsList = document.getElementById('debugSegmentsList');
         this.debugTotalDuration = document.getElementById('debugTotalDuration');
         this.debugSegmentCount = document.getElementById('debugSegmentCount');
@@ -553,37 +561,37 @@ class FlashbackRecorder {
         // Waveform visualization
         // Note: waveformCanvas and waveformContainer are already set above in DOM Elements section
         this.waveformCtx = null; // Will be set in initWaveformCanvas
-        this.waveformData = []; // Cache des données de forme d'onde (haute résolution)
-        this.audioContext = null; // AudioContext pour l'analyse
-        this.audioAnalyser = null; // AnalyserNode pour l'analyse en temps réel
+        this.waveformData = []; // Waveform data cache (high resolution)
+        this.audioContext = null; // AudioContext for analysis
+        this.audioAnalyser = null; // AnalyserNode for real-time analysis
         this.audioSource = null; // MediaStreamAudioSourceNode
-        this.waveformAnalysisInterval = null; // Interval pour l'analyse en temps réel
-        this.showWaveform = true; // Flag pour afficher/masquer la forme d'onde (chargé depuis localStorage)
-        this.waveformResolution = 20; // Résolution en millisecondes entre chaque point (ex: 20ms = 50 points/seconde)
-        this.maxAmplitude = 0; // Amplitude maximale pour normalisation
-        this.lastWaveformAnalysisTime = 0; // Timestamp de la dernière analyse
-        this.lastWaveformRenderTime = 0; // Timestamp du dernier rendu
-        this.waveformRecordingStartTime = 0; // Timestamp de début d'enregistrement pour calcul précis
-        this.waveformRecordingStartDuration = 0; // Durée totale au début de l'enregistrement
+        this.waveformAnalysisInterval = null; // Interval for real-time analysis
+        this.showWaveform = true; // Flag to show/hide the waveform (loaded from localStorage)
+        this.waveformResolution = 20; // Resolution in milliseconds between each point (e.g. 20ms = 50 points/second)
+        this.maxAmplitude = 0; // Maximum amplitude for normalization
+        this.lastWaveformAnalysisTime = 0; // Timestamp of the last analysis
+        this.lastWaveformRenderTime = 0; // Timestamp of the last render
+        this.waveformRecordingStartTime = 0; // Recording start timestamp for precise calculation
+        this.waveformRecordingStartDuration = 0; // Total duration at the start of recording
         this.waveformRenderInterval = 100; // Intervalle de rendu en millisecondes (100ms = 10 FPS)
 
         // Photo timeline visualization
         this.photoFrames = []; // Array of {timestamp, imageData, thumbnail}
-        this.showPhotoTimeline = true; // Flag pour afficher/masquer la photo timeline (chargé depuis localStorage)
+        this.showPhotoTimeline = true; // Flag to show/hide the photo timeline (loaded from localStorage)
         this.photoExtractionInterval = null; // Intervalle d'extraction de frames
-        this.lastPhotoExtractionTime = 0; // Timestamp de la dernière extraction
-        this.photoTimelineHeight = 36; // Hauteur fixe de la règle en pixels (réduite de 40%)
-        this.photoThumbnailWidth = 80; // Largeur cible d'une miniature en pixels (deprecated, kept for compatibility)
-        this.photoExtractionActive = false; // Flag pour contrôler si l'extraction est active
-        this.photoTimelineRefreshInterval = null; // Intervalle de rafraîchissement de l'affichage
-        this.isReExtracting = false; // Flag pour éviter les ré-extractions simultanées
-        this.timelineResizeDebounce = null; // Debounce pour les événements window resize
-        this.playbackPositionUpdateInterval = null; // Intervalle de mise à jour des traits rouges (100ms)
-        this.videoWidth = null; // Largeur de la vidéo en pixels
-        this.videoHeight = null; // Hauteur de la vidéo en pixels
-        this.photoTimelineResizeObserver = null; // ResizeObserver pour détecter les changements de dimensions
-        this.photoTimelineResizeDebounce = null; // Debounce timer pour les événements de redimensionnement
-        this.currentPhotoExtractionInterval = null; // Périodicité actuelle d'extraction (en secondes)
+        this.lastPhotoExtractionTime = 0; // Timestamp of the last extraction
+        this.photoTimelineHeight = 36; // Fixed ruler height in pixels (reduced by 40%)
+        this.photoThumbnailWidth = 80; // Target thumbnail width in pixels (deprecated, kept for compatibility)
+        this.photoExtractionActive = false; // Flag to control whether extraction is active
+        this.photoTimelineRefreshInterval = null; // Display refresh interval
+        this.isReExtracting = false; // Flag to prevent simultaneous re-extractions
+        this.timelineResizeDebounce = null; // Debounce for window resize events
+        this.playbackPositionUpdateInterval = null; // Update interval for the red cursors (100ms)
+        this.videoWidth = null; // Video width in pixels
+        this.videoHeight = null; // Video height in pixels
+        this.photoTimelineResizeObserver = null; // ResizeObserver to detect dimension changes
+        this.photoTimelineResizeDebounce = null; // Debounce timer for resize events
+        this.currentPhotoExtractionInterval = null; // Current extraction period (in seconds)
 
         // Mirror mode
         this.mirrorMode = true; // default on (matches CSS scaleX(-1))
@@ -595,22 +603,22 @@ class FlashbackRecorder {
         this.vuMeterSource = null;
 
         // Audio device management (BUG-020)
-        this.currentAudioInputDeviceId = null; // ID du périphérique d'entrée actuellement utilisé
-        this.currentAudioOutputDeviceId = null; // ID du périphérique de sortie actuellement utilisé
-        this.deviceChangePollingInterval = null; // Intervalle de polling pour détecter les changements (500ms)
-        this.deviceChangeHandler = null; // Handler pour l'événement devicechange
-        this.lastKnownDevices = []; // Liste des périphériques connus pour détecter les changements
+        this.currentAudioInputDeviceId = null; // ID of the input device currently in use
+        this.currentAudioOutputDeviceId = null; // ID of the output device currently in use
+        this.deviceChangePollingInterval = null; // Polling interval to detect changes (500ms)
+        this.deviceChangeHandler = null; // Handler for the devicechange event
+        this.lastKnownDevices = []; // List of known devices to detect changes
 
         // Multiple alerts management
         this.activeAlerts = new Map(); // Map<alertId, {element, timeoutId, createdAt}>
-        this.alertIdCounter = 0; // Compteur pour IDs uniques d'alertes
-        this.maxAlerts = 5; // Nombre maximum d'alertes simultanées
+        this.alertIdCounter = 0; // Counter for unique alert IDs
+        this.maxAlerts = 5; // Maximum number of simultaneous alerts
 
         // Inactivity monitoring (BUG-021)
-        this.inactivityTimeout = null; // Timer pour détecter l'inactivité
-        this.lastActivityTime = Date.now(); // Timestamp de la dernière activité
-        this.inactivityWarningShown = false; // Éviter multiples alertes pendant une session
-        this.inactivityEventListeners = []; // Stocker les listeners pour cleanup
+        this.inactivityTimeout = null; // Timer to detect inactivity
+        this.lastActivityTime = Date.now(); // Timestamp of the last activity
+        this.inactivityWarningShown = false; // Avoid multiple alerts during a session
+        this.inactivityEventListeners = []; // Store the listeners for cleanup
 
         // Onboarding and tooltips (UX-003)
         this.onboardingCurrentStep = 0; // Current step in onboarding (0-3)
@@ -669,6 +677,7 @@ class FlashbackRecorder {
         document.body.appendChild(this.focusOverlay);
 
         // Initialize
+        this.initDebugLogging(); // before anything else, so early events are captured
         this.loadSettings();
         this.initEventListeners();
         this.updateDurationDisplay();
@@ -701,6 +710,7 @@ class FlashbackRecorder {
         const oldState = this.state;
         this.state = newState;
         this.updateMarkerControls();
+        this.applyMirrorMode(); // mirror follows the state: on while recording, off while reviewing
         
         // Show first flashback overlay (UX-003)
         if (newState === 'flashback' && oldState !== 'flashback') {
@@ -1332,7 +1342,7 @@ class FlashbackRecorder {
                 ctx.fillStyle = '#9CA3AF';
                 ctx.font = '12px sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('Enregistrement en cours...', width / 2, height - 10);
+                ctx.fillText('Recording in progress...', width / 2, height - 10);
             });
             return;
         }
@@ -2520,10 +2530,10 @@ class FlashbackRecorder {
     // === INACTIVITY MONITORING (BUG-021) ===
 
     startInactivityMonitor() {
-        // Réinitialiser le timestamp d'activité sur événements utilisateur
+        // Reset the activity timestamp on user events
         const updateActivity = () => {
             this.lastActivityTime = Date.now();
-            this.inactivityWarningShown = false; // Réinitialiser l'alerte
+            this.inactivityWarningShown = false; // Reset the alert
         };
         
         const mousemoveHandler = updateActivity;
@@ -2534,14 +2544,14 @@ class FlashbackRecorder {
         window.addEventListener('keydown', keydownHandler);
         window.addEventListener('touchstart', touchstartHandler);
         
-        // Stocker les handlers pour cleanup
+        // Store the handlers for cleanup
         this.inactivityEventListeners = [
             { event: 'mousemove', handler: mousemoveHandler },
             { event: 'keydown', handler: keydownHandler },
             { event: 'touchstart', handler: touchstartHandler }
         ];
 
-        // Checker d'inactivité toutes les 10s
+        // Inactivity checker every 10s
         this.inactivityTimeout = setInterval(() => {
             const inactiveTime = Date.now() - this.lastActivityTime;
             const dontShowAgain = localStorage.getItem('disableInactivityWarning') === 'true';
@@ -2549,7 +2559,7 @@ class FlashbackRecorder {
                 this.showInactivityWarning();
                 this.inactivityWarningShown = true;
             }
-        }, 10000); // Vérifier toutes les 10s
+        }, 10000); // Check every 10s
     }
 
     stopInactivityMonitor() {
@@ -2558,7 +2568,7 @@ class FlashbackRecorder {
             this.inactivityTimeout = null;
         }
         
-        // Retirer les event listeners
+        // Remove the event listeners
         this.inactivityEventListeners.forEach(({ event, handler }) => {
             window.removeEventListener(event, handler);
         });
@@ -2566,7 +2576,7 @@ class FlashbackRecorder {
     }
 
     showInactivityWarning() {
-        // Créer un modal surimpression
+        // Create an overlay modal
         const modal = document.createElement('div');
         modal.style.position = 'fixed';
         modal.style.top = '0';
@@ -3127,6 +3137,15 @@ class FlashbackRecorder {
             };
             }
 
+            this.dlog('recorder:start', {
+                mimeType: this.activeMimeType,
+                segmentDurationSeconds: this.segmentDurationSeconds,
+                maxDuration: this.maxDuration,
+                recorderState: this.mediaRecorder && this.mediaRecorder.state,
+                videoTracks: this.stream ? this.stream.getVideoTracks().length : 0,
+                audioTracks: this.stream ? this.stream.getAudioTracks().length : 0
+            });
+
             // Start recording with 1-second chunks
             this.currentSessionId = ++this.currentSessionIdCounter;
             this.currentSessionChunks = [];
@@ -3454,6 +3473,15 @@ class FlashbackRecorder {
             options,
             currentState: this.state
         });
+        this.dlog('seek:request', {
+            targetTime: Number((targetTime || 0).toFixed(2)),
+            options,
+            lifetime: Number((this.lifetimeRecordedDuration || 0).toFixed(2)),
+            sessions: (this.recordedSessions || []).length,
+            curChunks: (this.currentSessionChunks || []).length,
+            chunkBuffer: (this.chunkBuffer || []).length,
+            recorderState: this.mediaRecorder && this.mediaRecorder.state
+        });
 
         const {
             allowFromRecording = false,
@@ -3474,12 +3502,21 @@ class FlashbackRecorder {
             console.log('[DEBUG] seekFlashback: Allowed during transitioning');
         } else {
             console.log('[DEBUG] seekFlashback early return: Invalid state');
+            this.dlog('seek:abort', { reason: 'invalid-state', state: this.state, options });
             return;
         }
 
         // Check available data
         if (this.recordedSessions.length === 0 && this.currentSessionChunks.length === 0) {
             console.log('[DEBUG] seekFlashback early return: No data available');
+            this.dlog('seek:abort', {
+                reason: 'no-data',
+                sessions: this.recordedSessions.length,
+                curChunks: this.currentSessionChunks.length,
+                chunkBuffer: (this.chunkBuffer || []).length,
+                lifetime: Number((this.lifetimeRecordedDuration || 0).toFixed(2)),
+                recorderState: this.mediaRecorder && this.mediaRecorder.state
+            });
             this.showMessage('No recording data available for flashback', 'error');
             return;
         }
@@ -4188,6 +4225,7 @@ class FlashbackRecorder {
     handleRecordedChunk(event) {
 
         if (!event || !event.data || event.data.size === 0) {
+            this.dlog('chunk:empty', { hasEvent: !!event, size: event && event.data && event.data.size });
             return;
         }
 
@@ -4407,7 +4445,13 @@ class FlashbackRecorder {
         this.shiftBtn.classList.remove('btn-primary', 'btn-danger', 'btn-secondary');
         this.shiftBtn.classList.add('btn');
         this.shiftBtn.classList.add(variantClass);
-        this.shiftBtn.textContent = label;
+        // Only swap the label, so the keyboard shortcut hint underneath survives.
+        const labelEl = this.shiftBtn.querySelector('.btn-label');
+        if (labelEl) {
+            labelEl.textContent = label;
+        } else {
+            this.shiftBtn.textContent = label;
+        }
         this.shiftBtn.disabled = !!disabled;
     }
 
@@ -4603,6 +4647,16 @@ class FlashbackRecorder {
         this.updateDebugPanel();
         this.updateTimeline();
         this.debugLogState('save:end', { newSessionId: sessionId });
+        this.dlog('session:saved', {
+            id: sessionId,
+            chunks: session.chunkCount,
+            duration: Number((session.duration || 0).toFixed(2)),
+            absStart: Number((session.absoluteStart ?? 0).toFixed(2)),
+            absEnd: Number((session.absoluteEnd ?? 0).toFixed(2)),
+            hasHeader: !!session.headerBlob,
+            sessionsTotal: this.recordedSessions.length,
+            lifetime: Number((this.lifetimeRecordedDuration || 0).toFixed(2))
+        });
     }
 
     // Drop whole finalized segments (oldest first) that fall outside the retained window.
@@ -4813,6 +4867,11 @@ class FlashbackRecorder {
             }
         }
 
+        this.dlog('sessions:rebuilt', {
+            sessions: cleanedSessions.length,
+            visibleStart: globalVisibleStart === null ? null : Number(globalVisibleStart.toFixed(2)),
+            visibleEnd: globalVisibleEnd === null ? null : Number(globalVisibleEnd.toFixed(2))
+        });
         this.recordedSessions = cleanedSessions;
         this.sessionBoundaries = newBoundaries;
         this.visibleWindowStart = globalVisibleStart ?? this.lifetimeRecordedDuration;
@@ -4827,6 +4886,7 @@ class FlashbackRecorder {
          * @param {string} text - Message text
          * @param {string} type - Message type: 'error', 'success', 'info'
          */
+        this.dlog('ui:message', { type, text });
         // Map 'info' type to overlay (no separate info message zone exists)
         const overlayType = type === 'info' ? 'info' : type;
         this.showOverlayMessage(text, overlayType);
@@ -4846,6 +4906,232 @@ class FlashbackRecorder {
         } catch (e) {
             return date.toTimeString().split(' ')[0];
         }
+    }
+
+    // === DEBUGGING LOGS ===
+    // A ring buffer of recent events, mirrored to localStorage so a crash (or an accidental close)
+    // still leaves a trace. Two slots are kept: the live session and the previous one. A run that
+    // never signals a clean exit is treated as a crash and its log is surfaced once on next launch.
+
+    static get LOG_MAX_ENTRIES() { return 300; }
+    static get LOG_MAX_ENTRY_CHARS() { return 2000; }
+    static get LOG_MAX_STORE_CHARS() { return 400000; } // ~400 KB, far under the ~5 MB storage quota
+    static get LOG_KEY_CURRENT() { return 'flashbackDebugLog:current'; }
+    static get LOG_KEY_PREVIOUS() { return 'flashbackDebugLog:previous'; }
+    static get LOG_KEY_CLEAN_EXIT() { return 'flashbackDebugLog:cleanExit'; }
+
+    initDebugLogging() {
+        const C = FlashbackRecorder;
+        this.debugLogEntries = [];
+        this.debugLogT0 = Date.now();
+        this._debugLogFlushTimer = null;
+        this._crashedPreviousSession = false;
+
+        try {
+            const carried = localStorage.getItem(C.LOG_KEY_CURRENT);
+            const cleanExit = localStorage.getItem(C.LOG_KEY_CLEAN_EXIT) === 'true';
+            if (carried && carried.length > 2 && !cleanExit) {
+                localStorage.setItem(C.LOG_KEY_PREVIOUS, carried);
+                this._crashedPreviousSession = true;
+            }
+            localStorage.setItem(C.LOG_KEY_CURRENT, '[]');
+            localStorage.setItem(C.LOG_KEY_CLEAN_EXIT, 'false');
+        } catch (e) { /* storage unavailable: logs stay in memory only */ }
+
+        // Uncaught failures are exactly what we want in the trace.
+        window.addEventListener('error', (ev) => {
+            this.dlog('window:error', {
+                message: ev.message, source: ev.filename, line: ev.lineno,
+                stack: ev.error && String(ev.error.stack || '').slice(0, 600)
+            });
+        });
+        window.addEventListener('unhandledrejection', (ev) => {
+            const r = ev.reason;
+            this.dlog('window:unhandledRejection', {
+                reason: r && (r.message || String(r)),
+                stack: r && String(r.stack || '').slice(0, 600)
+            });
+        });
+        window.addEventListener('beforeunload', () => {
+            this.dlog('app:exit', {});
+            this.flushDebugLog();
+            try { localStorage.setItem(C.LOG_KEY_CLEAN_EXIT, 'true'); } catch (e) { /* noop */ }
+        });
+
+        this.initDebugLogsUI();
+        this.dlog('app:start', {
+            userAgent: navigator.userAgent,
+            crashedPreviousSession: this._crashedPreviousSession
+        });
+
+        // Surface a crashed run once, after the app has settled.
+        if (this._crashedPreviousSession) {
+            setTimeout(() => this.openDebugLogs('previous'), 900);
+        }
+    }
+
+    // Record one event. Cheap, safe to call from anywhere, and never throws.
+    dlog(event, data = {}) {
+        try {
+            if (!this.debugLogEntries) return;
+            const C = FlashbackRecorder;
+            let line = JSON.stringify({
+                rel: Number(((Date.now() - this.debugLogT0) / 1000).toFixed(2)),
+                state: this.state,
+                event,
+                data
+            });
+            if (line.length > C.LOG_MAX_ENTRY_CHARS) {
+                line = line.slice(0, C.LOG_MAX_ENTRY_CHARS) + '..."TRUNCATED"}';
+            }
+            this.debugLogEntries.push(line);
+            if (this.debugLogEntries.length > C.LOG_MAX_ENTRIES) {
+                this.debugLogEntries.splice(0, this.debugLogEntries.length - C.LOG_MAX_ENTRIES);
+            }
+            this.scheduleDebugLogFlush();
+        } catch (e) { /* logging must never break the app */ }
+    }
+
+    // Persist at most once a second: crash-safety without hammering localStorage.
+    scheduleDebugLogFlush() {
+        if (this._debugLogFlushTimer) return;
+        this._debugLogFlushTimer = setTimeout(() => {
+            this._debugLogFlushTimer = null;
+            this.flushDebugLog();
+        }, 1000);
+    }
+
+    flushDebugLog() {
+        try {
+            let payload = '[' + this.debugLogEntries.join(',') + ']';
+            while (payload.length > FlashbackRecorder.LOG_MAX_STORE_CHARS && this.debugLogEntries.length > 1) {
+                this.debugLogEntries.splice(0, Math.ceil(this.debugLogEntries.length * 0.2));
+                payload = '[' + this.debugLogEntries.join(',') + ']';
+            }
+            localStorage.setItem(FlashbackRecorder.LOG_KEY_CURRENT, payload);
+        } catch (e) { /* quota or unavailable: the in-memory ring still works */ }
+    }
+
+    // Render the log as pasteable text, with a header snapshotting the state that matters most
+    // when a flashback misbehaves.
+    formatDebugLog(which = 'current') {
+        const C = FlashbackRecorder;
+        let raw;
+        if (which === 'previous') {
+            try { raw = localStorage.getItem(C.LOG_KEY_PREVIOUS); } catch (e) { raw = null; }
+        } else {
+            this.flushDebugLog();
+            raw = '[' + this.debugLogEntries.join(',') + ']';
+        }
+        let entries = [];
+        try { entries = JSON.parse(raw || '[]'); } catch (e) { entries = []; }
+
+        const sessions = this.recordedSessions || [];
+        const header = [
+            '=== Flashback Mirror - debugging logs ===',
+            'exported     : ' + new Date().toISOString(),
+            'source       : ' + (which === 'previous' ? 'PREVIOUS SESSION (unclean exit / crash)' : 'current session'),
+            'entries      : ' + entries.length + (entries.length >= C.LOG_MAX_ENTRIES ? ' (ring buffer full, oldest dropped)' : ''),
+            'userAgent    : ' + navigator.userAgent,
+            '--- state now ---',
+            'state        : ' + this.state,
+            'lifetime     : ' + Number((this.lifetimeRecordedDuration || 0).toFixed(2)) + 's',
+            'maxDuration  : ' + this.maxDuration + 's',
+            'segmentDur   : ' + this.segmentDurationSeconds + 's',
+            'sessions     : ' + sessions.length,
+            'curChunks    : ' + (this.currentSessionChunks || []).length,
+            'chunkBuffer  : ' + (this.chunkBuffer || []).length,
+            'mimeType     : ' + (this.activeMimeType || '(none)'),
+            'mseReady     : ' + (this._mse ? this._mse.ready : '(no mse)'),
+            '--- events ---'
+        ];
+        const lines = entries.map(e => {
+            const rel = ('+' + (e.rel != null ? e.rel.toFixed(2) : '?') + 's').padStart(10);
+            const st = ('[' + (e.state || '?') + ']').padEnd(19);
+            let data = '';
+            try { data = JSON.stringify(e.data); } catch (x) { data = '(unserializable)'; }
+            return rel + ' ' + st + ' ' + e.event + (data && data !== '{}' ? ' ' + data : '');
+        });
+        return header.join('\n') + '\n' + (lines.length ? lines.join('\n') : '(no events recorded)') + '\n';
+    }
+
+    initDebugLogsUI() {
+        if (this.debugLogsBtn) {
+            this.debugLogsBtn.addEventListener('click', () => this.openDebugLogs('current'));
+        }
+        const close = () => this.closeDebugLogs();
+        if (this.logsModalClose) this.logsModalClose.addEventListener('click', close);
+        if (this.logsCloseBtn) this.logsCloseBtn.addEventListener('click', close);
+        if (this.logsModalBackdrop) this.logsModalBackdrop.addEventListener('click', close);
+        if (this.logsCopyBtn) {
+            this.logsCopyBtn.addEventListener('click', async () => {
+                const ok = await this.copyDebugLogsToClipboard(this.logsModalText.value);
+                this.setDebugLogsStatus(ok
+                    ? 'Copied to clipboard. Paste it wherever you need.'
+                    : 'Could not copy automatically - select the text and press Cmd/Ctrl+C.', ok ? '' : 'warn');
+            });
+        }
+        // Escape closes too, so there is always an obvious way out.
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.logsModal && !this.logsModal.hidden) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.closeDebugLogs();
+            }
+        }, true);
+    }
+
+    setDebugLogsStatus(message, variant = '') {
+        if (!this.logsModalStatus) return;
+        this.logsModalStatus.textContent = message;
+        this.logsModalStatus.className = 'logs-modal-status' + (variant ? ' logs-modal-status--' + variant : '');
+    }
+
+    async copyDebugLogsToClipboard(text) {
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+                return true;
+            }
+        } catch (e) { /* fall through to the selection fallback */ }
+        try {
+            this.logsModalText.focus();
+            this.logsModalText.select();
+            return document.execCommand('copy');
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // Opens the log panel and copies straight away, so reporting an issue is a single click.
+    async openDebugLogs(which = 'current') {
+        if (!this.logsModal || !this.logsModalText) return;
+        const isPrevious = which === 'previous';
+        const text = this.formatDebugLog(which);
+        this.logsModalText.value = text;
+        const title = document.getElementById('logsModalTitle');
+        if (title) {
+            title.textContent = isPrevious
+                ? 'Debugging logs - previous session (crash)'
+                : 'Debugging logs';
+        }
+        this.logsModal.hidden = false;
+        this.setDebugLogsStatus('Copying...', '');
+        const ok = await this.copyDebugLogsToClipboard(text);
+        if (isPrevious) {
+            this.setDebugLogsStatus(ok
+                ? 'The app closed unexpectedly last time. These are the logs from that session - already copied to your clipboard.'
+                : 'The app closed unexpectedly last time. Select the text and press Cmd/Ctrl+C to copy it.', 'crash');
+        } else {
+            this.setDebugLogsStatus(ok
+                ? 'Copied to clipboard. Paste it wherever you need.'
+                : 'Could not copy automatically - select the text and press Cmd/Ctrl+C.', ok ? '' : 'warn');
+        }
+        if (this.logsCloseBtn) this.logsCloseBtn.focus();
+    }
+
+    closeDebugLogs() {
+        if (this.logsModal) this.logsModal.hidden = true;
     }
 
     debugLogState(label, extra = {}) {
@@ -5324,12 +5610,17 @@ class FlashbackRecorder {
             }))
             .sort((a, b) => a.absStart - b.absStart);
         if (entries.length === 0) {
+            this.dlog('mse:build-fail', { reason: 'no-valid-segments', sessionsIn: sessions.length });
             return null;
         }
         const mime = entries[0].session.mimeType || this.activeMimeType || 'video/webm';
         if (!(window.MediaSource && MediaSource.isTypeSupported(mime))) {
+            this.dlog('mse:build-fail', {
+                reason: 'mime-unsupported', mime, hasMediaSource: !!window.MediaSource
+            });
             return null;
         }
+        this.dlog('mse:build-start', { entries: entries.length, mime, targetAbs: Number((targetAbs || 0).toFixed(2)) });
         const mediaSource = new MediaSource();
         const objectUrl = URL.createObjectURL(mediaSource);
         const ctx = {
@@ -5352,6 +5643,7 @@ class FlashbackRecorder {
             mediaSource.addEventListener('sourceopen', () => { clearTimeout(timeout); resolve(true); }, { once: true });
         });
         if (!opened) {
+            this.dlog('mse:build-fail', { reason: 'sourceopen-timeout', entries: entries.length, mime });
             try { URL.revokeObjectURL(objectUrl); } catch (e) { /* noop */ }
             return null;
         }
@@ -5383,12 +5675,22 @@ class FlashbackRecorder {
             }
         } catch (e) {
             // A QuotaExceededError this early means even the minimal window didn't fit — bail out.
+            this.dlog('mse:append-error', {
+                name: e && e.name, message: e && String(e.message).slice(0, 200),
+                buffered: ctx.segMap.length, bytesMB: Number((ctx.bytesBuffered / 1048576).toFixed(1))
+            });
         }
 
         if (!ctx.ready) {
+            this.dlog('mse:build-fail', { reason: 'not-ready', entries: entries.length, mime });
             try { URL.revokeObjectURL(objectUrl); } catch (e) { /* noop */ }
             return null;
         }
+        this.dlog('mse:build-ok', {
+            windowSegments: ctx.segMap.length, ofEntries: entries.length,
+            bytesMB: Number((ctx.bytesBuffered / 1048576).toFixed(1)),
+            loIdx: ctx.loIdx, hiIdx: ctx.hiIdx, lastIdx: ctx.lastIdx, endedStream: ctx.endedStream
+        });
         return ctx;
     }
 
@@ -5633,7 +5935,7 @@ class FlashbackRecorder {
             } else {
                 const info = document.createElement('p');
                 info.className = 'config-audio-info';
-                info.textContent = 'La sélection de la sortie audio n\'est pas disponible dans ce navigateur. Le son suit automatiquement la sortie par défaut de votre appareil.';
+                info.textContent = 'Audio output selection is not available in this browser. Sound automatically follows your device\'s default output.';
                 this.configAudioOutputContent.appendChild(info);
             }
         }
@@ -5696,13 +5998,13 @@ class FlashbackRecorder {
         // "Default system" is always first
         const defOpt = document.createElement('option');
         defOpt.value = 'default';
-        defOpt.textContent = 'Défaut du système';
+        defOpt.textContent = 'System default';
         sel.appendChild(defOpt);
         for (const d of outputDevices) {
             if (d.deviceId === 'default') continue; // already covered above
             const opt = document.createElement('option');
             opt.value = d.deviceId;
-            opt.textContent = d.label || `Sortie ${sel.options.length}`;
+            opt.textContent = d.label || `Output ${sel.options.length}`;
             sel.appendChild(opt);
         }
         sel.value = current;
@@ -5718,7 +6020,7 @@ class FlashbackRecorder {
         for (const d of devices) {
             const opt = document.createElement('option');
             opt.value = d.deviceId;
-            opt.textContent = d.label || `Périphérique ${selectEl.options.length + 1}`;
+            opt.textContent = d.label || `Device ${selectEl.options.length + 1}`;
             selectEl.appendChild(opt);
         }
         if (prev && Array.from(selectEl.options).some(o => o.value === prev)) {
@@ -5740,7 +6042,7 @@ class FlashbackRecorder {
     async handleMicDeviceChange(deviceId) {
         if (!deviceId || deviceId === this.currentAudioInputDeviceId) return;
         const confirmed = window.confirm(
-            'Changer de microphone va redémarrer l\'enregistrement. Le buffer actuel sera perdu. Continuer ?'
+            'Changing the microphone will restart recording. The current buffer will be lost. Continue?'
         );
         if (!confirmed) {
             // Revert select
@@ -5754,16 +6056,20 @@ class FlashbackRecorder {
     async handleCameraDeviceChange(deviceId) {
         if (!deviceId) return;
         const confirmed = window.confirm(
-            'Changer de caméra va redémarrer l\'enregistrement. Le buffer actuel sera perdu. Continuer ?'
+            'Changing the camera will restart recording. The current buffer will be lost. Continue?'
         );
         if (!confirmed) return;
         localStorage.setItem('preferredVideoDeviceId', deviceId);
         this.stopFlashbackAndResumeRecording();
     }
 
+    // The mirror only makes sense on the live preview, where the screen stands in for a mirror.
+    // During review the eye expects a normal video, so the flip is dropped in the flashback states.
     applyMirrorMode() {
         if (!this.videoPreview) return;
-        this.videoPreview.style.transform = this.mirrorMode ? 'scaleX(-1)' : 'none';
+        const isReviewing = this.state === 'flashback' || this.state === 'flashbackPaused';
+        const mirrored = this.mirrorMode && !isReviewing;
+        this.videoPreview.style.transform = mirrored ? 'scaleX(-1)' : 'none';
     }
 
     startVuMeter() {
