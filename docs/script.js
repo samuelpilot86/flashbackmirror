@@ -580,10 +580,6 @@ class FlashbackRecorder {
         this.forwardResetTimer = null;
         this.previousAbsoluteTime = null; // Store previous position for offset calculation
         this.timeOffsetOverlayTimeout = null; // Timeout for fade out
-        this.markerUpPressCount = 0;           // Counter for rapid ArrowUp presses
-        this.markerUpResetTimer = null;        // Timer to reset the counter
-        this.lastMarkerUpPressTime = 0;        // Timestamp of last ArrowUp press
-        this.markerUpFastPressThreshold = 500; // 0.5 seconds in milliseconds
         this.recordingStartTime = 0;
         this.totalRecordedTime = 0;
         this.maxDuration = 600; // seconds
@@ -790,11 +786,7 @@ class FlashbackRecorder {
             this.addMarkerBtn.addEventListener('click', () => this.handleAddFlashbackMarker());
         }
         if (this.prevMarkerBtn) {
-            this.prevMarkerBtn.addEventListener('click', () => {
-                this.incrementMarkerUpCounter();
-                const skipCount = this.markerUpPressCount;
-                this.handleNavigateFlashbackMarker(-1, skipCount);
-            });
+            this.prevMarkerBtn.addEventListener('click', () => this.handleNavigateFlashbackMarker(-1));
         }
         if (this.nextMarkerBtn) {
             this.nextMarkerBtn.addEventListener('click', () => this.handleNavigateFlashbackMarker(1));
@@ -2460,7 +2452,7 @@ class FlashbackRecorder {
         return marker;
     }
 
-    async handleNavigateFlashbackMarker(direction, skipCount = 1) {
+    async handleNavigateFlashbackMarker(direction) {
         if (direction !== -1 && direction !== 1) {
             return;
         }
@@ -2470,7 +2462,7 @@ class FlashbackRecorder {
         if (this.flashbackMarkers.length === 0 && this.lifetimeRecordedDuration <= 0) {
             return;
         }
-        const targetTime = this.getTargetTimeForMarkerNavigation(direction, skipCount);
+        const targetTime = this.getTargetTimeForMarkerNavigation(direction);
         if (!Number.isFinite(targetTime) || targetTime < 0) {
             return;
         }
@@ -2481,31 +2473,21 @@ class FlashbackRecorder {
         });
     }
 
-    getTargetTimeForMarkerNavigation(direction, skipCount = 1) {
+    getTargetTimeForMarkerNavigation(direction) {
         const sorted = this.flashbackMarkers.slice().sort((a, b) => a.absoluteTime - b.absoluteTime);
         const current = this.getCurrentAbsoluteTime();
         const epsilon = this.markerNavigationEpsilon;
         if (direction === -1) {
-            // Find all markers before the current timestamp
-            const previousMarkers = [];
+            // Previous marker strictly before current (epsilon skips the marker we just landed on
+            // while playback has already started). Always one step — no cumulative skip on rapid presses.
             for (let i = sorted.length - 1; i >= 0; i--) {
                 if ((sorted[i].absoluteTime || 0) < (current - epsilon)) {
-                    previousMarkers.push(sorted[i]);
+                    return Math.max(sorted[i].absoluteTime, 0);
                 }
             }
-            
-            // If we have enough markers, skip by skipCount
-            if (previousMarkers.length >= skipCount) {
-                const targetMarker = previousMarkers[skipCount - 1];
-                return Math.max(targetMarker.absoluteTime, 0);
-            }
-            
-            // If we don't have enough markers, go to the start of the window
-            // or the start of the recording if the window starts at 0
             const windowStart = this.visibleWindowStart ?? 0;
             return Math.max(0, windowStart);
         }
-        // Direction === 1 (forward) - no change necessary for now
         for (let i = 0; i < sorted.length; i++) {
             if ((sorted[i].absoluteTime || 0) > (current + epsilon)) {
                 return Math.max(sorted[i].absoluteTime, 0);
@@ -3407,13 +3389,7 @@ class FlashbackRecorder {
         if (this.state === 'transitioning') {
             return;
         }
-        
-        // Increment the counter and get the number of markers to skip
-        this.incrementMarkerUpCounter();
-        const skipCount = this.markerUpPressCount; // 1 for first press, 2+ for rapid presses
-        
-        // Call navigation with the skip count
-        this.handleNavigateFlashbackMarker(-1, skipCount);
+        this.handleNavigateFlashbackMarker(-1);
     }
 
     handleArrowDownKey() {
@@ -3669,30 +3645,6 @@ class FlashbackRecorder {
         this.forwardResetTimer = setTimeout(() => {
             this.forwardPressCount = 0;
         }, 500);
-    }
-
-    incrementMarkerUpCounter() {
-        const now = Date.now();
-        const timeSinceLastPress = now - this.lastMarkerUpPressTime;
-        
-        if (timeSinceLastPress < this.markerUpFastPressThreshold && this.lastMarkerUpPressTime > 0) {
-            // Rapid press: increment the counter
-            this.markerUpPressCount++;
-        } else {
-            // Press after delay: reset the counter
-            this.markerUpPressCount = 1;
-        }
-        
-        this.lastMarkerUpPressTime = now;
-        
-        // Reset the counter after the delay
-        if (this.markerUpResetTimer) {
-            clearTimeout(this.markerUpResetTimer);
-        }
-        this.markerUpResetTimer = setTimeout(() => {
-            this.markerUpPressCount = 0;
-            this.markerUpResetTimer = null;
-        }, this.markerUpFastPressThreshold);
     }
 
     updateCounterDisplay() {
