@@ -1,0 +1,36 @@
+=== Flashback Mirror - debugging logs ===
+exported     : 2026-09-27T20:52:16.445Z
+source       : current session
+entries      : 10
+userAgent    : Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0
+--- state now ---
+state        : recording
+lifetime     : 18.05s
+maxDuration  : 600s
+segmentDur   : 15s
+sessions     : 1
+curChunks    : 3
+chunkBuffer  : 18
+mimeType     : video/webm;codecs=vp8,opus
+mseReady     : (no mse)
+--- configuration ---
+autoStart    : true
+mirror       : true
+waveform     : true
+photoTimeline: true
+maxDuration  : 600s
+segmentDur   : 15s
+microphone   : Micro MacBook Pro
+camera       : Caméra FaceTime HD
+audioOutput  : System default
+--- events ---
+    +0.00s [recordingStopped]  app:start {"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0","crashedPreviousSession":false,"browser":"firefox","isSecureContext":true,"hasMediaDevices":true,"protocol":"https:"}
+    +0.00s [recordingStopped]  capture:start-attempt {"reason":"auto","hasExistingStream":false,"browser":"firefox","isSecureContext":true,"hasMediaDevices":true,"protocol":"https:"}
+    +0.01s [recordingStopped]  capture:env {"reason":"app-start","browser":"firefox","isSecureContext":true,"hasMediaDevices":true,"protocol":"https:","cameraPermission":"granted","microphonePermission":"granted","permissionHint":"granted"}
+    +0.05s [recording]         recorder:start {"mimeType":"video/webm;codecs=vp8,opus","segmentDurationSeconds":15,"maxDuration":600,"recorderState":"inactive","videoTracks":1,"audioTracks":1}
+    +0.05s [recording]         keepalive:start {"device":"default","freqHz":100,"gain":0.5,"everyMs":10000,"pulseMs":1000}
+    +0.05s [recording]         audio:devices-initial {"outputs":["+JjbUrNy:soundcore Liberty 4 NC","yrIkylja:Microsoft Teams Audio Device","HavHC2AL:Haut-parleurs MacBook Pro"]}
+    +0.24s [recording]         keepalive:context-state {"state":"running"}
+    +4.05s [recording]         ui:message {"type":"info","text":"New audio input device detected: soundcore Liberty 4 NC. Recording continues with the current device. The new device will be used on the next recording."}
+   +15.06s [recording]         sessions:rebuilt {"sessions":1,"visibleStart":0,"visibleEnd":15.01}
+   +15.06s [recording]         session:saved {"id":1,"chunks":15,"duration":15.01,"absStart":0,"absEnd":15.01,"hasHeader":true,"sessionsTotal":1,"lifetime":15.01}
