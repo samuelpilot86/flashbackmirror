@@ -1,6 +1,9 @@
 // Set to true to show the debug (Buffer Analysis) panel
 const SHOW_DEBUG_PANEL = false;
 
+// Cloudflare Worker that creates the GitHub issue. Empty = clipboard fallback until the relay is deployed.
+const BUG_REPORT_ENDPOINT = 'https://flashback-bug-report.flashback.workers.dev';
+
 // Logging bridge for the audio classes, which run outside FlashbackRecorder.
 // Falls back to a no-op until the recorder exists, so audio never depends on logging.
 function audioDlog(event, data = {}) {
@@ -355,8 +358,11 @@ class AudioOutputMonitor {
                 this.noDeviceAlertId = null;
             }
 
-            // Check if current device (if set) is still available
-            if (this.currentDeviceId && !currentDeviceIds.has(this.currentDeviceId)) {
+            // 'default' / empty is the OS sink, not a deviceId returned by enumerateDevices().
+            const currentIsConcrete = this.currentDeviceId
+                && this.currentDeviceId !== 'default'
+                && this.currentDeviceId !== '';
+            if (currentIsConcrete && !currentDeviceIds.has(this.currentDeviceId)) {
                 console.log('AudioOutputMonitor: Current device no longer available, switching to default');
                 audioDlog('audio:current-device-lost', { device: shortDeviceId(this.currentDeviceId) });
                 await this.switchToDefaultDevice();
@@ -509,6 +515,10 @@ class FlashbackRecorder {
         this.videoOverlay = document.getElementById('videoOverlay');
         this.alertsContainer = document.getElementById('alertsContainer');
         this.timeOffsetOverlay = document.getElementById('timeOffsetOverlay');
+        this.captureStartPanel = document.getElementById('captureStartPanel');
+        this.captureStartTitle = document.getElementById('captureStartTitle');
+        this.captureStartBody = document.getElementById('captureStartBody');
+        this.captureStartRetryBtn = document.getElementById('captureStartRetryBtn');
         this.stateIndicatorDot = document.getElementById('stateIndicatorDot');
         this.stateIndicatorLabel = document.getElementById('stateIndicatorLabel');
         this.timelineContainer = document.getElementById('timelineContainer');
@@ -538,7 +548,22 @@ class FlashbackRecorder {
         this.configVuMeter = document.getElementById('configVuMeter');
         this.configCameraPreview = document.getElementById('configCameraPreview');
         this.configMirrorToggle = document.getElementById('configMirrorToggle');
+        this.configAutoStartToggle = document.getElementById('configAutoStartToggle');
         this.debugLogsBtn = document.getElementById('debugLogsBtn');
+        this.bugReportBtn = document.getElementById('bugReportBtn');
+        this.bugReportModal = document.getElementById('bugReportModal');
+        this.bugReportBackdrop = document.getElementById('bugReportBackdrop');
+        this.bugReportClose = document.getElementById('bugReportClose');
+        this.bugReportCancelBtn = document.getElementById('bugReportCancelBtn');
+        this.bugReportSendBtn = document.getElementById('bugReportSendBtn');
+        this.bugReportStatus = document.getElementById('bugReportStatus');
+        this.bugReportMessage = document.getElementById('bugReportMessage');
+        this.bugReportContact = document.getElementById('bugReportContact');
+        this.bugReportScreenshot = document.getElementById('bugReportScreenshot');
+        this.bugReportPreview = document.getElementById('bugReportPreview');
+        this.bugReportPreviewImg = document.getElementById('bugReportPreviewImg');
+        this.bugReportPreviewEmpty = document.getElementById('bugReportPreviewEmpty');
+        this._bugReportScreenshot = null;
         this.logsModal = document.getElementById('logsModal');
         this.logsModalBackdrop = document.getElementById('logsModalBackdrop');
         this.logsModalClose = document.getElementById('logsModalClose');
@@ -558,7 +583,7 @@ class FlashbackRecorder {
         // State
         this.stream = null;
         this.mediaRecorder = null;
-        this.state = 'recording'; // 'recording' | 'flashback' | 'recordingStopped' | 'flashbackPaused' | 'transitioning'
+        this.state = 'recordingStopped'; // 'recording' | 'flashback' | 'recordingStopped' | 'flashbackPaused' | 'transitioning'
         this.recordedSessions = [];
         this.chunkBuffer = []; // rolling buffer of individual chunks { blob, duration, mimeType, timestamp, sessionId, sequence }
         this.currentSessionChunks = []; // chunks collected during the current session (before save)
@@ -636,6 +661,7 @@ class FlashbackRecorder {
         // Photo timeline visualization
         this.photoFrames = []; // Array of {timestamp, imageData, thumbnail}
         this.showPhotoTimeline = true; // Flag to show/hide the photo timeline (loaded from localStorage)
+        this.autoStartRecording = true; // Start capture on launch (loaded from localStorage)
         this.photoExtractionInterval = null; // Intervalle d'extraction de frames
         this.lastPhotoExtractionTime = 0; // Timestamp of the last extraction
         this.photoTimelineHeight = 36; // Fixed ruler height in pixels (reduced by 40%)
@@ -749,9 +775,12 @@ class FlashbackRecorder {
         this.initConfigPanel();
         // audioOutputMonitor.start() is called in startRecording(), after getUserMedia,
         // so enumerateDevices() has permissions and returns real device labels (BUG-022).
-        
-        this.setState('recording');
-        this.startRecording(); // Auto-start as per US-001
+
+        this.updateUIForRecordingStopped();
+        if (this.autoStartRecording) {
+            this._captureStartReason = 'auto';
+            this.startRecording();
+        }
         
         // Show onboarding tutorial on first launch (UX-003)
         this.showOnboardingIfFirstTime();
@@ -782,6 +811,9 @@ class FlashbackRecorder {
         }
         this.flashbackBtn.addEventListener('click', () => this.handleBack());
         this.forwardBtn.addEventListener('click', () => this.handleForward());
+        if (this.captureStartRetryBtn) {
+            this.captureStartRetryBtn.addEventListener('click', () => this.retryCaptureStart());
+        }
         if (this.addMarkerBtn) {
             this.addMarkerBtn.addEventListener('click', () => this.handleAddFlashbackMarker());
         }
@@ -966,6 +998,9 @@ class FlashbackRecorder {
             this.showPhotoTimeline = true;
         }
         console.log('Photo timeline visibility loaded:', this.showPhotoTimeline);
+
+        const savedAutoStart = localStorage.getItem('flashbackAutoStartRecording');
+        this.autoStartRecording = savedAutoStart !== null ? savedAutoStart === 'true' : true;
     }
 
     saveSettings() {
@@ -973,6 +1008,7 @@ class FlashbackRecorder {
         localStorage.setItem('flashbackShowWaveform', this.showWaveform.toString());
         localStorage.setItem('flashbackShowPhotoTimeline', this.showPhotoTimeline.toString());
         localStorage.setItem('flashbackMirrorMode', this.mirrorMode.toString());
+        localStorage.setItem('flashbackAutoStartRecording', this.autoStartRecording.toString());
     }
 
     // ===== WAVEFORM VISUALIZATION METHODS =====
@@ -1789,10 +1825,20 @@ class FlashbackRecorder {
                 const blobUrl = URL.createObjectURL(chunk.blob);
                 video.src = blobUrl;
                 
+                let settled = false;
                 const cleanup = () => {
-                    URL.revokeObjectURL(blobUrl);
+                    clearTimeout(timeoutId);
+                    try { URL.revokeObjectURL(blobUrl); } catch (e) { /* noop */ }
+                    try { video.removeAttribute('src'); video.load(); } catch (e) { /* noop */ }
                     video.remove();
                 };
+                const finish = (value) => {
+                    if (settled) return;
+                    settled = true;
+                    cleanup();
+                    resolve(value);
+                };
+                const timeoutId = setTimeout(() => finish(null), 2000);
                 
                 video.addEventListener('loadedmetadata', () => {
                     try {
@@ -1801,8 +1847,7 @@ class FlashbackRecorder {
                         video.currentTime = seekTime;
                     } catch (e) {
                         console.warn('Error seeking in chunk video', e);
-                        cleanup();
-                        resolve(null);
+                        finish(null);
                     }
                 }, { once: true });
                 
@@ -1814,20 +1859,16 @@ class FlashbackRecorder {
                         canvas.width = 160;
                         canvas.height = 90;
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        const imageData = canvas.toDataURL('image/jpeg', 0.7);
-                        cleanup();
-                        resolve(imageData);
+                        finish(canvas.toDataURL('image/jpeg', 0.7));
                     } catch (e) {
                         console.warn('Error extracting frame from chunk', e);
-                        cleanup();
-                        resolve(null);
+                        finish(null);
                     }
                 }, { once: true });
                 
                 video.addEventListener('error', () => {
                     console.warn('Error loading chunk video');
-                    cleanup();
-                    resolve(null);
+                    finish(null);
                 }, { once: true });
                 
                 video.load();
@@ -2726,7 +2767,7 @@ class FlashbackRecorder {
             "Welcome! Flashback Mirror records continuously to help you easily review yourself and improve (sports, dance, performing arts, public speaking...).",
             "Use ← to go back in time (includes video and audio – be careful if in public! 😉).",
             "Click on the timeline to review a specific moment.",
-            "Recording has started automatically. Happy training!"
+            this.getOnboardingLastStepText()
         ];
 
         const content = document.createElement('div');
@@ -2830,6 +2871,28 @@ class FlashbackRecorder {
         setTimeout(() => {
             modal.style.opacity = '1';
         }, 10);
+    }
+
+    getOnboardingLastStepText() {
+        if (this.state === 'recording') {
+            return this.autoStartRecording
+                ? 'Recording has started automatically. Happy training!'
+                : 'Recording is running. Happy training!';
+        }
+        if (!this.autoStartRecording) {
+            return 'Press Record when you are ready to start. Happy training!';
+        }
+        return 'Once camera and microphone access is allowed, recording starts automatically. Happy training!';
+    }
+
+    refreshOnboardingAfterCaptureChange() {
+        if (!this.onboardingModal || this.onboardingCurrentStep !== 3) {
+            return;
+        }
+        const stepText = this.onboardingModal.querySelector('p');
+        if (stepText) {
+            stepText.textContent = this.getOnboardingLastStepText() + ' (4/4)';
+        }
     }
 
     closeOnboardingModal(neverShowAgain) {
@@ -3005,6 +3068,255 @@ class FlashbackRecorder {
         localStorage.setItem('flashbackFirstTimeShown', 'true');
     }
 
+    // === CAPTURE START FAILURE (permissions / devices) ===
+
+    getBrowserFamily() {
+        const ua = navigator.userAgent || '';
+        if (/Firefox\//i.test(ua)) {
+            return 'firefox';
+        }
+        if (/Edg\//i.test(ua)) {
+            return 'edge';
+        }
+        if (/OPR\/|Opera\//i.test(ua)) {
+            return 'other';
+        }
+        if (/Chrome\//i.test(ua) && !/Edg\//i.test(ua)) {
+            return 'chrome';
+        }
+        if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua) && !/Chromium\//i.test(ua)) {
+            return 'safari';
+        }
+        return 'other';
+    }
+
+    getBrowserDisplayName() {
+        const names = {
+            chrome: 'Chrome',
+            edge: 'Edge',
+            firefox: 'Firefox',
+            safari: 'Safari',
+            other: 'this browser'
+        };
+        return names[this.getBrowserFamily()] || 'this browser';
+    }
+
+    classifyCaptureError(err) {
+        const name = (err && err.name) || '';
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+            return 'permission';
+        }
+        if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+            return 'notfound';
+        }
+        if (name === 'NotReadableError' || name === 'TrackStartError') {
+            return 'busy';
+        }
+        if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+            return 'overconstrained';
+        }
+        return 'other';
+    }
+
+    async queryOnePermission(name) {
+        if (!navigator.permissions || !navigator.permissions.query) {
+            return 'unsupported';
+        }
+        try {
+            const status = await navigator.permissions.query({ name });
+            return (status && status.state) || 'unknown';
+        } catch (e) {
+            return 'unsupported';
+        }
+    }
+
+    async getCapturePermissionHint() {
+        const states = [];
+        for (const name of ['camera', 'microphone']) {
+            const state = await this.queryOnePermission(name);
+            if (state && state !== 'unsupported' && state !== 'unknown') {
+                states.push(state);
+            }
+        }
+        if (states.includes('denied')) {
+            return 'denied';
+        }
+        if (states.includes('prompt')) {
+            return 'prompt';
+        }
+        if (states.length && states.every(s => s === 'granted')) {
+            return 'granted';
+        }
+        return null;
+    }
+
+    captureEnvironmentSnapshot() {
+        return {
+            browser: this.getBrowserFamily(),
+            isSecureContext: !!window.isSecureContext,
+            hasMediaDevices: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+            protocol: location.protocol
+        };
+    }
+
+    async logCaptureEnvironment(reason) {
+        try {
+            const cameraPermission = await this.queryOnePermission('camera');
+            const microphonePermission = await this.queryOnePermission('microphone');
+            this.dlog('capture:env', {
+                reason,
+                ...this.captureEnvironmentSnapshot(),
+                cameraPermission,
+                microphonePermission,
+                permissionHint: await this.getCapturePermissionHint()
+            });
+        } catch (e) {
+            this.dlog('capture:env', { reason, error: e && e.message });
+        }
+    }
+
+    getCaptureStartFailureCopy(kind, permissionHint) {
+        const title = "Recording didn't start";
+        const browser = this.getBrowserDisplayName();
+        if (kind === 'permission') {
+            return { title, body: this.getPermissionFailureBody(browser, permissionHint) };
+        }
+        if (kind === 'notfound') {
+            return {
+                title,
+                body: 'No camera or microphone was found.\n\nPlug in a webcam if needed, check that it is not disabled, then try again.'
+            };
+        }
+        if (kind === 'busy') {
+            return {
+                title,
+                body: 'The camera or microphone is already in use by another app (Zoom, Teams, another browser tab).\n\nClose that app, then try again.'
+            };
+        }
+        if (kind === 'overconstrained') {
+            return {
+                title,
+                body: 'This camera or microphone does not accept the requested settings.\n\nTry again, or pick another device in settings.'
+            };
+        }
+        return {
+            title,
+            body: 'Recording could not start.\n\nAllow camera and microphone access, then try again.'
+        };
+    }
+
+    getPermissionFailureBody(browser, permissionHint) {
+        const family = this.getBrowserFamily();
+        let hintLine = '';
+        if (permissionHint === 'denied') {
+            hintLine = `${browser} has blocked this site from using the camera or microphone.\n\n`;
+        } else if (permissionHint === 'prompt') {
+            hintLine = `${browser} did not show a permission prompt.\n\n`;
+        }
+
+        if (family === 'chrome' || family === 'edge') {
+            return (
+                hintLine +
+                `Open the lock icon (or the crossed camera) in the address bar and allow Camera and Microphone, then try again.\n\n` +
+                `Windows: Settings → Privacy → Camera / Microphone → allow ${browser}.\n` +
+                `Mac: System Settings → Privacy & Security → Camera / Microphone → enable ${browser}.`
+            );
+        }
+        if (family === 'firefox') {
+            return (
+                hintLine +
+                'Click the camera or lock icon to the left of the address bar, choose Allow, then try again.\n\n' +
+                'You can also check Firefox Settings → Privacy & Security → Permissions.'
+            );
+        }
+        if (family === 'safari') {
+            return (
+                hintLine +
+                'Safari → Settings for This Website → allow Camera and Microphone, then try again.\n\n' +
+                'On Mac, also enable Safari under System Settings → Privacy & Security → Camera / Microphone.'
+            );
+        }
+        return (
+            hintLine +
+            'Allow camera and microphone for this site in your browser settings, then try again.'
+        );
+    }
+
+    showCaptureStartPanel(copy) {
+        if (!this.captureStartPanel) {
+            return;
+        }
+        if (this.captureStartTitle) {
+            this.captureStartTitle.textContent = copy.title;
+        }
+        if (this.captureStartBody) {
+            this.captureStartBody.textContent = copy.body;
+        }
+        if (this.captureStartRetryBtn) {
+            this.captureStartRetryBtn.disabled = false;
+        }
+        this.captureStartPanel.hidden = false;
+    }
+
+    hideCaptureStartPanel() {
+        if (this.captureStartPanel) {
+            this.captureStartPanel.hidden = true;
+        }
+        if (this.captureStartRetryBtn) {
+            this.captureStartRetryBtn.disabled = false;
+        }
+    }
+
+    async handleCaptureStartFailure(err) {
+        const kind = this.classifyCaptureError(err);
+        let permissionHint = null;
+        let cameraPermission = null;
+        let microphonePermission = null;
+        try {
+            cameraPermission = await this.queryOnePermission('camera');
+            microphonePermission = await this.queryOnePermission('microphone');
+            if (kind === 'permission') {
+                permissionHint = await this.getCapturePermissionHint();
+            }
+        } catch (e) { /* keep reporting the original capture error */ }
+        this.dlog('capture:start-failed', {
+            name: err && err.name,
+            message: err && err.message,
+            kind,
+            permissionHint,
+            cameraPermission,
+            microphonePermission,
+            reason: this._captureStartReason || 'auto',
+            ...this.captureEnvironmentSnapshot()
+        });
+        try {
+            if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                this.mediaRecorder.stop();
+            }
+        } catch (e) {
+            // Keep going: the point is to leave a recoverable READY state
+        }
+        this.setState('recordingStopped');
+        this.updateUIForRecordingStopped();
+        this.showCaptureStartPanel(this.getCaptureStartFailureCopy(kind, permissionHint));
+        this.refreshOnboardingAfterCaptureChange();
+    }
+
+    async retryCaptureStart() {
+        if (this.captureStartRetryBtn) {
+            this.captureStartRetryBtn.disabled = true;
+        }
+        this._captureStartReason = 'retry';
+        this.dlog('capture:retry', { ...this.captureEnvironmentSnapshot() });
+        try {
+            await this.startRecording();
+        } finally {
+            if (this.captureStartPanel && !this.captureStartPanel.hidden && this.captureStartRetryBtn) {
+                this.captureStartRetryBtn.disabled = false;
+            }
+        }
+    }
+
     // === STARTING AND STOPPING RECORDING ===
 
     async startRecording() {
@@ -3021,6 +3333,14 @@ class FlashbackRecorder {
             }
             // Don't get a new stream if we already have one active
             if (!this.stream || (this.stream && !this.stream.active)) {
+                this.dlog('capture:start-attempt', {
+                    reason: this._captureStartReason || 'auto',
+                    hasExistingStream: false,
+                    ...this.captureEnvironmentSnapshot()
+                });
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw Object.assign(new Error('Camera API unavailable'), { name: 'NotAllowedError' });
+                }
                 if (this.stream) {
                     // Stop the old stream before obtaining a new one
                     this.stream.getTracks().forEach(track => track.stop());
@@ -3054,19 +3374,43 @@ class FlashbackRecorder {
                         audio: audioConstraints
                     });
                 } catch (err) {
+                    this.dlog('capture:gum-error', {
+                        name: err && err.name,
+                        message: err && err.message,
+                        step: 'preferred-constraints',
+                        reason: this._captureStartReason || 'auto'
+                    });
                     // Fallback: if format constraints are not supported by the browser/device,
                     // keep at least the filter disabling (echoCancellation, noiseSuppression, autoGainControl)
                     if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
                         console.warn('Audio format constraints not supported, falling back to basic constraints', err);
-                        this.stream = await navigator.mediaDevices.getUserMedia({
-                            video: videoConstraints,
-                            audio: {
-                                echoCancellation: false,
-                                noiseSuppression: false,
-                                autoGainControl: false,
-                                ...(preferredMicId ? { deviceId: { ideal: preferredMicId } } : {})
+                        this.dlog('capture:gum-fallback', { step: 'filters-only', from: err.name });
+                        try {
+                            this.stream = await navigator.mediaDevices.getUserMedia({
+                                video: videoConstraints,
+                                audio: {
+                                    echoCancellation: false,
+                                    noiseSuppression: false,
+                                    autoGainControl: false,
+                                    ...(preferredMicId ? { deviceId: { ideal: preferredMicId } } : {})
+                                }
+                            });
+                        } catch (err2) {
+                            this.dlog('capture:gum-error', {
+                                name: err2 && err2.name,
+                                message: err2 && err2.message,
+                                step: 'filters-only'
+                            });
+                            if (err2.name === 'OverconstrainedError' || err2.name === 'ConstraintNotSatisfiedError') {
+                                this.dlog('capture:gum-fallback', { step: 'video-audio-true', from: err2.name });
+                                this.stream = await navigator.mediaDevices.getUserMedia({
+                                    video: true,
+                                    audio: true
+                                });
+                            } else {
+                                throw err2;
                             }
-                        });
+                        }
                     } else {
                         throw err; // Re-throw other errors (permissions, etc.)
                     }
@@ -3196,7 +3540,9 @@ class FlashbackRecorder {
             this.currentSessionStartMs = Date.now();
             this._lastChunkTimestamp = this.currentSessionStartMs;
             this.currentSessionHeaderBlob = null;
-            this.mediaRecorder.start(1000);
+            if (this.mediaRecorder.state !== 'recording') {
+                this.mediaRecorder.start(1000);
+            }
             this.recordingStartTime = this.currentSessionStartMs;
 
             this.updateUIForRecording();
@@ -3208,8 +3554,10 @@ class FlashbackRecorder {
             
             // Start inactivity monitoring (BUG-021)
             this.startInactivityMonitor();
+            this.hideCaptureStartPanel();
+            this.refreshOnboardingAfterCaptureChange();
         } catch (err) {
-            this.showMessage('Camera/microphone access denied or unavailable', 'error');
+            await this.handleCaptureStartFailure(err);
         }
     }
 
@@ -3359,6 +3707,7 @@ class FlashbackRecorder {
             return;
         }
         if (this.state === 'recordingStopped') {
+            this._captureStartReason = 'record-button';
             this.startRecording();
             return;
         }
@@ -3949,13 +4298,14 @@ class FlashbackRecorder {
             // follows the OS output device automatically, including Bluetooth speakers.
             if (!this.currentAudioOutputDeviceId) {
                 this.currentAudioOutputDeviceId = 'default';
+                this._lastDefaultOutputId = defaultOutputDeviceId;
                 await this.updateFlashbackVideoAudioOutput('default');
                 if (this.audioOutputMonitor) {
                     this.audioOutputMonitor.setCurrentDevice('default');
                 }
             } else if (this.currentAudioOutputDeviceId === 'default') {
-                // Re-apply on every devicechange so routing stays current after BT connect/disconnect.
-                // Log when the OS default actually moved (e.g. a BT speaker connecting or dropping).
+                // Re-apply only when the OS default actually moved (BT connect/disconnect).
+                // Calling setSinkId every 500ms was stalling Firefox playback and leaking sinks.
                 if (defaultOutputDeviceId !== this._lastDefaultOutputId) {
                     this.dlog('audio:default-output-changed', {
                         from: shortDeviceId(this._lastDefaultOutputId),
@@ -3963,8 +4313,8 @@ class FlashbackRecorder {
                         label: defaultOutputDevice?.label || '(no label)'
                     });
                     this._lastDefaultOutputId = defaultOutputDeviceId;
+                    await this.updateFlashbackVideoAudioOutput('default');
                 }
-                await this.updateFlashbackVideoAudioOutput('default');
             }
 
             // Check for input device changes
@@ -4982,10 +5332,13 @@ class FlashbackRecorder {
         });
 
         this.initDebugLogsUI();
+        this.initBugReportUI();
         this.dlog('app:start', {
             userAgent: navigator.userAgent,
-            crashedPreviousSession: this._crashedPreviousSession
+            crashedPreviousSession: this._crashedPreviousSession,
+            ...this.captureEnvironmentSnapshot()
         });
+        this.logCaptureEnvironment('app-start');
 
         // Surface a crashed run once, after the app has settled.
         if (this._crashedPreviousSession) {
@@ -5035,6 +5388,50 @@ class FlashbackRecorder {
         } catch (e) { /* quota or unavailable: the in-memory ring still works */ }
     }
 
+    getAppConfigurationSnapshot() {
+        const storageGet = (key) => {
+            try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+        };
+        const selectedText = (el) => {
+            if (!el || el.selectedIndex < 0) return '';
+            const option = el.options[el.selectedIndex];
+            return (option && option.text) || '';
+        };
+        const micId = this.currentAudioInputDeviceId || storageGet('preferredAudioInputDeviceId');
+        const camId = storageGet('preferredVideoDeviceId');
+        const outId = this.currentAudioOutputDeviceId || storageGet('preferredAudioOutputDeviceId') || 'default';
+        const outSelect = document.getElementById('configAudioOutputSelect');
+        const labelOrId = (id, fallback) => this.getDeviceLabel(id) || fallback;
+        return {
+            autoStartRecording: !!this.autoStartRecording,
+            mirrorWhileRecording: !!this.mirrorMode,
+            showWaveform: !!this.showWaveform,
+            showPhotoTimeline: !!this.showPhotoTimeline,
+            maxDurationSeconds: this.maxDuration,
+            segmentDurationSeconds: this.segmentDurationSeconds,
+            microphone: labelOrId(micId, selectedText(this.configMicSelect) || '(default)'),
+            camera: labelOrId(camId, selectedText(this.configCameraSelect) || '(default)'),
+            audioOutput: labelOrId(outId, selectedText(outSelect) || 'default'),
+            mimeType: this.activeMimeType || '(none)'
+        };
+    }
+
+    formatAppConfigurationLines() {
+        const c = this.getAppConfigurationSnapshot();
+        return [
+            '--- configuration ---',
+            'autoStart    : ' + c.autoStartRecording,
+            'mirror       : ' + c.mirrorWhileRecording,
+            'waveform     : ' + c.showWaveform,
+            'photoTimeline: ' + c.showPhotoTimeline,
+            'maxDuration  : ' + c.maxDurationSeconds + 's',
+            'segmentDur   : ' + c.segmentDurationSeconds + 's',
+            'microphone   : ' + c.microphone,
+            'camera       : ' + c.camera,
+            'audioOutput  : ' + c.audioOutput
+        ];
+    }
+
     // Render the log as pasteable text, with a header snapshotting the state that matters most
     // when a flashback misbehaves.
     formatDebugLog(which = 'current') {
@@ -5066,6 +5463,7 @@ class FlashbackRecorder {
             'chunkBuffer  : ' + (this.chunkBuffer || []).length,
             'mimeType     : ' + (this.activeMimeType || '(none)'),
             'mseReady     : ' + (this._mse ? this._mse.ready : '(no mse)'),
+            ...this.formatAppConfigurationLines(),
             '--- events ---'
         ];
         const lines = entries.map(e => {
@@ -5096,7 +5494,16 @@ class FlashbackRecorder {
         }
         // Escape closes too, so there is always an obvious way out.
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.logsModal && !this.logsModal.hidden) {
+            if (e.key !== 'Escape') {
+                return;
+            }
+            if (this.bugReportModal && !this.bugReportModal.hidden) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.closeBugReport();
+                return;
+            }
+            if (this.logsModal && !this.logsModal.hidden) {
                 e.preventDefault();
                 e.stopPropagation();
                 this.closeDebugLogs();
@@ -5118,9 +5525,16 @@ class FlashbackRecorder {
             }
         } catch (e) { /* fall through to the selection fallback */ }
         try {
-            this.logsModalText.focus();
-            this.logsModalText.select();
-            return document.execCommand('copy');
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            ta.remove();
+            return ok;
         } catch (e) {
             return false;
         }
@@ -5155,6 +5569,308 @@ class FlashbackRecorder {
 
     closeDebugLogs() {
         if (this.logsModal) this.logsModal.hidden = true;
+    }
+
+    initBugReportUI() {
+        if (this.bugReportBtn) {
+            this.bugReportBtn.addEventListener('click', () => this.openBugReport());
+        }
+        const close = () => this.closeBugReport();
+        if (this.bugReportClose) this.bugReportClose.addEventListener('click', close);
+        if (this.bugReportCancelBtn) this.bugReportCancelBtn.addEventListener('click', close);
+        if (this.bugReportBackdrop) this.bugReportBackdrop.addEventListener('click', close);
+        if (this.bugReportSendBtn) {
+            this.bugReportSendBtn.addEventListener('click', () => this.submitBugReport());
+        }
+        if (this.bugReportScreenshot) {
+            this.bugReportScreenshot.addEventListener('change', () => this.updateBugReportPreview());
+        }
+    }
+
+    updateBugReportPreview() {
+        if (!this.bugReportPreview) return;
+        const show = !this.bugReportScreenshot || this.bugReportScreenshot.checked;
+        if (!show) {
+            this.bugReportPreview.hidden = true;
+            return;
+        }
+        this.bugReportPreview.hidden = false;
+        const hasShot = !!this._bugReportScreenshot;
+        if (this.bugReportPreviewImg) {
+            if (hasShot) {
+                this.bugReportPreviewImg.src = this._bugReportScreenshot;
+                this.bugReportPreviewImg.hidden = false;
+            } else {
+                this.bugReportPreviewImg.removeAttribute('src');
+                this.bugReportPreviewImg.hidden = true;
+            }
+        }
+        if (this.bugReportPreviewEmpty) {
+            this.bugReportPreviewEmpty.hidden = hasShot;
+        }
+    }
+
+    async openBugReport() {
+        if (!this.bugReportModal) return;
+        this.closeDebugLogs();
+        if (this.bugReportMessage) this.bugReportMessage.value = '';
+        if (this.bugReportContact) this.bugReportContact.value = '';
+        if (this.bugReportScreenshot) this.bugReportScreenshot.checked = true;
+        this._bugReportScreenshot = null;
+        this.updateBugReportPreview();
+        if (this.bugReportBtn) this.bugReportBtn.disabled = true;
+        try {
+            this._bugReportScreenshot = await this.captureBugReportScreenshot();
+        } catch (e) {
+            this._bugReportScreenshot = null;
+            this.dlog('bug-report:screenshot-error', { message: e && e.message });
+        } finally {
+            if (this.bugReportBtn) this.bugReportBtn.disabled = false;
+        }
+        this.setBugReportStatus(
+            BUG_REPORT_ENDPOINT
+                ? 'Describe the problem if you want. Logs and current settings are attached automatically.'
+                : 'The report relay is not deployed yet. You can still prepare a report: Send will copy it to the clipboard.',
+            'idle'
+        );
+        this.bugReportModal.hidden = false;
+        this.updateBugReportPreview();
+        if (this.bugReportMessage) this.bugReportMessage.focus();
+    }
+
+    closeBugReport() {
+        if (this.bugReportModal) this.bugReportModal.hidden = true;
+        if (this.bugReportSendBtn) this.bugReportSendBtn.disabled = false;
+        this._bugReportScreenshot = null;
+        if (this.bugReportPreviewImg) this.bugReportPreviewImg.removeAttribute('src');
+    }
+
+    setBugReportStatus(message, variant = 'idle') {
+        if (!this.bugReportStatus) return;
+        this.bugReportStatus.textContent = message;
+        this.bugReportStatus.className = 'logs-modal-status' + (variant ? ' logs-modal-status--' + variant : '');
+    }
+
+    loadHtml2Canvas() {
+        if (window.html2canvas) {
+            return Promise.resolve(window.html2canvas);
+        }
+        if (this._html2canvasLoader) {
+            return this._html2canvasLoader;
+        }
+        this._html2canvasLoader = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+            script.onload = () => {
+                if (window.html2canvas) resolve(window.html2canvas);
+                else reject(new Error('html2canvas missing after load'));
+            };
+            script.onerror = () => reject(new Error('Could not load html2canvas'));
+            document.head.appendChild(script);
+        });
+        return this._html2canvasLoader;
+    }
+
+    coverVideosForScreenshot() {
+        const restorers = [];
+        document.querySelectorAll('video').forEach(video => {
+            const parent = video.parentElement;
+            if (!parent) return;
+            const prevPosition = parent.style.position;
+            if (getComputedStyle(parent).position === 'static') {
+                parent.style.position = 'relative';
+            }
+            const overlay = document.createElement('canvas');
+            overlay.setAttribute('data-bug-report-blur', '1');
+            overlay.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;';
+            const width = Math.max(16, video.videoWidth || video.clientWidth || 320);
+            const height = Math.max(9, video.videoHeight || video.clientHeight || 180);
+            overlay.width = width;
+            overlay.height = height;
+            const tiny = document.createElement('canvas');
+            tiny.width = 10;
+            tiny.height = Math.max(4, Math.round(10 * height / width));
+            try {
+                tiny.getContext('2d').drawImage(video, 0, 0, tiny.width, tiny.height);
+                const ctx = overlay.getContext('2d');
+                ctx.imageSmoothingEnabled = true;
+                ctx.filter = 'blur(32px)';
+                ctx.drawImage(tiny, 0, 0, width, height);
+                ctx.filter = 'none';
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
+                ctx.fillRect(0, 0, width, height);
+            } catch (e) {
+                const ctx = overlay.getContext('2d');
+                ctx.fillStyle = '#1E293B';
+                ctx.fillRect(0, 0, width, height);
+            }
+            const prevVisibility = video.style.visibility;
+            video.style.visibility = 'hidden';
+            parent.appendChild(overlay);
+            restorers.push(() => {
+                overlay.remove();
+                video.style.visibility = prevVisibility;
+                parent.style.position = prevPosition;
+            });
+        });
+        return () => restorers.forEach(fn => {
+            try { fn(); } catch (e) { /* ignore */ }
+        });
+    }
+
+    canvasToJpegDataUrl(canvas, quality = 0.55, maxWidth = 960) {
+        let src = canvas;
+        if (canvas.width > maxWidth) {
+            const scaled = document.createElement('canvas');
+            scaled.width = maxWidth;
+            scaled.height = Math.round(canvas.height * (maxWidth / canvas.width));
+            scaled.getContext('2d').drawImage(canvas, 0, 0, scaled.width, scaled.height);
+            src = scaled;
+        }
+        return src.toDataURL('image/jpeg', quality);
+    }
+
+    async captureBugReportScreenshot() {
+        const restore = this.coverVideosForScreenshot();
+        const reportWasHidden = this.bugReportModal ? this.bugReportModal.hidden : true;
+        const logsWereHidden = this.logsModal ? this.logsModal.hidden : true;
+        try {
+            if (this.bugReportModal) this.bugReportModal.hidden = true;
+            if (this.logsModal) this.logsModal.hidden = true;
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            try {
+                const html2canvas = await this.loadHtml2Canvas();
+                const width = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+                const height = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+                const canvas = await html2canvas(document.documentElement, {
+                    backgroundColor: '#F8FAFC',
+                    scale: 1,
+                    useCORS: true,
+                    logging: false,
+                    width,
+                    height,
+                    windowWidth: width,
+                    windowHeight: height,
+                    x: 0,
+                    y: 0,
+                    scrollX: 0,
+                    scrollY: 0,
+                    ignoreElements: (el) => !!(el && el.closest && el.closest('#bugReportModal, #logsModal'))
+                });
+                return this.canvasToJpegDataUrl(canvas, 0.55, 1280);
+            } catch (e) {
+                const video = this.videoPreview;
+                if (video && (video.videoWidth || video.clientWidth)) {
+                    const fallback = document.createElement('canvas');
+                    fallback.width = video.videoWidth || 640;
+                    fallback.height = video.videoHeight || 360;
+                    const tiny = document.createElement('canvas');
+                    tiny.width = 10;
+                    tiny.height = 6;
+                    tiny.getContext('2d').drawImage(video, 0, 0, 10, 6);
+                    const ctx = fallback.getContext('2d');
+                    ctx.filter = 'blur(32px)';
+                    ctx.drawImage(tiny, 0, 0, fallback.width, fallback.height);
+                    return this.canvasToJpegDataUrl(fallback);
+                }
+                return null;
+            }
+        } finally {
+            restore();
+            if (this.bugReportModal && !reportWasHidden) this.bugReportModal.hidden = false;
+            if (this.logsModal && !logsWereHidden) this.logsModal.hidden = false;
+        }
+    }
+
+    async submitBugReport() {
+        if (this.bugReportSendBtn) this.bugReportSendBtn.disabled = true;
+        this.setBugReportStatus('Preparing report…', 'idle');
+        const message = this.bugReportMessage ? this.bugReportMessage.value.trim() : '';
+        const contact = this.bugReportContact ? this.bugReportContact.value.trim() : '';
+        const includeShot = !this.bugReportScreenshot || this.bugReportScreenshot.checked;
+        const screenshot = includeShot ? this._bugReportScreenshot : null;
+        const config = this.getAppConfigurationSnapshot();
+        try {
+            const payload = {
+                message,
+                contact,
+                config,
+                logs: this.formatDebugLog('current'),
+                screenshot,
+                pageUrl: location.href,
+                userAgent: navigator.userAgent,
+                state: this.state
+            };
+            this.dlog('bug-report:submit', {
+                hasScreenshot: !!screenshot,
+                hasContact: !!contact,
+                messageChars: message.length
+            });
+
+            if (!BUG_REPORT_ENDPOINT) {
+                const clipboardText = [
+                    contact ? ('contact: ' + contact) : 'contact: (not provided)',
+                    message ? ('message: ' + message) : '',
+                    payload.logs
+                ].filter(Boolean).join('\n\n');
+                const copied = await this.copyDebugLogsToClipboard(clipboardText);
+                this.setBugReportStatus(
+                    copied
+                        ? 'Relay not configured. Debugging logs were copied to the clipboard.'
+                        : 'Relay not configured. Copy the debugging logs from Troubleshooting.',
+                    'warn'
+                );
+                if (this.bugReportSendBtn) this.bugReportSendBtn.disabled = false;
+                return;
+            }
+
+            this.setBugReportStatus('Sending report…', 'idle');
+            const res = await fetch(BUG_REPORT_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            let data = {};
+            try { data = await res.json(); } catch (e) { data = {}; }
+            if (!res.ok || !data.ok) {
+                throw new Error((data && data.error) || ('HTTP ' + res.status));
+            }
+            this.dlog('bug-report:sent', { number: data.number, url: data.url });
+            this.setBugReportStatus(
+                data.url
+                    ? 'Thanks. The report was sent.'
+                    : 'Thanks. The report was sent.',
+                ''
+            );
+            if (this.bugReportSendBtn) {
+                this.bugReportSendBtn.textContent = 'Sent';
+            }
+            setTimeout(() => {
+                this.closeBugReport();
+                if (this.bugReportSendBtn) {
+                    this.bugReportSendBtn.textContent = 'Send report to Samuel';
+                    this.bugReportSendBtn.disabled = false;
+                }
+            }, 1800);
+        } catch (err) {
+            this.dlog('bug-report:error', {
+                message: err && err.message,
+                protocol: location.protocol
+            });
+            const copied = await this.copyDebugLogsToClipboard(this.formatDebugLog('current'));
+            const fromFile = location.protocol === 'file:';
+            this.setBugReportStatus(
+                fromFile
+                    ? (copied
+                        ? 'Could not send from a local file. Debugging logs were copied to the clipboard. Open the app via a local web server or the website, then send again.'
+                        : 'Could not send from a local file. Open the app via a local web server or the website, then copy the debugging logs from Troubleshooting.')
+                    : (copied
+                        ? 'Could not send the report. Debugging logs were copied to the clipboard.'
+                        : 'Could not send the report. Copy the debugging logs from Troubleshooting.'),
+                'warn'
+            );
+            if (this.bugReportSendBtn) this.bugReportSendBtn.disabled = false;
+        }
     }
 
     debugLogState(label, extra = {}) {
@@ -5444,6 +6160,15 @@ class FlashbackRecorder {
         }
         this.allSessions = [...sessions];
 
+        const session = sessions.find(s => timestamp <= ((s.absoluteEnd ?? s.visibleEndAbs ?? 0) + 0.05))
+            || sessions[sessions.length - 1];
+        if (session) {
+            const played = await this._playFlashbackViaObjectUrl(session, timestamp, fbId);
+            if (played) {
+                return;
+            }
+        }
+
         // (Re)build the windowed MediaSource when there isn't a usable one, the segment set changed,
         // or the requested time falls outside the currently-buffered run. Back/forward presses that
         // stay inside the buffered run reuse it and just re-seek; larger jumps rebuild the window
@@ -5454,6 +6179,7 @@ class FlashbackRecorder {
         if (needRebuild) {
             this.clearFlashbackMonitors();
             this._teardownMse();
+            this._teardownBlobPlayback();
             // Attach the video element up front: a MediaSource only fires 'sourceopen' once it is
             // bound to a media element, so _buildFlashbackMediaSource needs the element ready.
             this.flashbackVideo = this.videoPreview;
@@ -5502,12 +6228,164 @@ class FlashbackRecorder {
         const tryPlay = () => this.flashbackVideo && this.flashbackVideo.play();
         Promise.resolve()
             .then(tryPlay)
+            .then(() => {
+                if (this._flashbackId !== fbId) return;
+                this.dlog('mse:play', this._mseVideoSnap({ mseTime: Number((mseTime || 0).toFixed(2)) }));
+            })
             .catch(() => {
                 // A rejected play() (e.g. transient autoplay/power-save interruption) shouldn't kill
                 // the flashback — retry once; if it still fails, stay paused in flashback.
                 if (this._flashbackId !== fbId) return;
+                this.dlog('mse:play-fail', this._mseVideoSnap({}));
                 return Promise.resolve().then(tryPlay).catch(() => {});
             });
+    }
+
+    async _playFlashbackViaObjectUrl(session, timestamp, fbId) {
+        const absStart = session.absoluteStart ?? session.visibleStartAbs ?? 0;
+        // Reuse the already-loaded file: comparing video.src to the object URL is unreliable
+        // (Firefox rewrites it), and rebuilding + load() on every click costs several seconds.
+        const sameBlob = !!this._blobPlaybackUrl
+            && this._blobPlaybackSessionId === session.id
+            && this.flashbackVideo;
+        if (sameBlob) {
+            try {
+                this.flashbackVideo.currentTime = Math.max(0, timestamp - absStart);
+            } catch (e) { /* seek best-effort */ }
+            this._syncFlashbackIndex(timestamp);
+            this._attachFlashbackHandlers(fbId);
+            this.setState('flashback');
+            this.updateUIForFlashback();
+            this.updateDebugPanel();
+            this.startTimer();
+            const tryPlaySame = () => this.flashbackVideo && this.flashbackVideo.play();
+            Promise.resolve().then(tryPlaySame).catch(() => {});
+            this.dlog('flashback:blob-seek', this._mseVideoSnap({ absStart: Number(absStart.toFixed(2)) }));
+            return true;
+        }
+
+        const blob = this.buildFlashbackSessionBlob(session);
+        if (!blob || blob.size === 0) {
+            this.dlog('flashback:blob-play-fail', { reason: 'empty-blob' });
+            return false;
+        }
+
+        this.clearFlashbackMonitors();
+        this._teardownMse();
+        this._mse = null;
+        if (this._blobPlaybackUrl) {
+            try { URL.revokeObjectURL(this._blobPlaybackUrl); } catch (e) { /* noop */ }
+        }
+        this._blobPlaybackUrl = URL.createObjectURL(blob);
+        this._blobPlaybackAbsStart = absStart;
+        this._blobPlaybackSessionId = session.id;
+        this.flashbackVideo = this.videoPreview;
+        const video = this.videoPreview;
+        video.srcObject = null;
+        video.muted = false;
+
+        // Listen before assigning src: Firefox often fires loadedmetadata immediately,
+        // and a late listener used to wait out the 4s timeout.
+        const loadStarted = Date.now();
+        await new Promise((resolve) => {
+            if (video.readyState >= 1 && video.src === this._blobPlaybackUrl) {
+                resolve();
+                return;
+            }
+            let settled = false;
+            const done = () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeout);
+                resolve();
+            };
+            const timeout = setTimeout(done, 1500);
+            video.addEventListener('loadedmetadata', done, { once: true });
+            video.src = this._blobPlaybackUrl;
+            if (video.readyState >= 1) {
+                done();
+            }
+        });
+        if (this._flashbackId !== fbId) {
+            return true;
+        }
+
+        const duration = video.duration;
+        this.dlog('flashback:blob-play', {
+            duration: Number.isFinite(duration) ? Number(duration.toFixed(2)) : duration,
+            sessionDuration: Number((session.duration || 0).toFixed(2)),
+            absStart: Number(absStart.toFixed(2)),
+            sizeKB: Math.round(blob.size / 1024),
+            waitedMs: Date.now() - loadStarted,
+            mime: blob.type || this.activeMimeType
+        });
+
+        try {
+            video.currentTime = Math.max(0, timestamp - absStart);
+        } catch (e) { /* seek best-effort */ }
+
+        this._syncFlashbackIndex(timestamp);
+        this._attachFlashbackHandlers(fbId);
+        this.setState('flashback');
+        this.updateUIForFlashback();
+        this.updateDebugPanel();
+        this.startTimer();
+        this.stopPhotoExtraction();
+        this.stopPhotoTimelineRefresh();
+        this.updateFlashbackVideoAudioOutput(this.currentAudioOutputDeviceId || 'default');
+        const tryPlay = () => this.flashbackVideo && this.flashbackVideo.play();
+        Promise.resolve().then(tryPlay).catch(() => {
+            if (this._flashbackId !== fbId) return;
+            return Promise.resolve().then(tryPlay).catch(() => {});
+        });
+        this.dlog('flashback:blob-playing', this._mseVideoSnap({}));
+        return true;
+    }
+
+    _teardownBlobPlayback() {
+        if (this._blobPlaybackUrl) {
+            try { URL.revokeObjectURL(this._blobPlaybackUrl); } catch (e) { /* noop */ }
+            this._blobPlaybackUrl = null;
+        }
+        this._blobPlaybackAbsStart = 0;
+        this._blobPlaybackSessionId = null;
+    }
+
+    _nextFlashbackSession() {
+        const sessions = this.allSessions || this.recordedSessions || [];
+        const idx = sessions.findIndex(s => s && s.id === this._blobPlaybackSessionId);
+        if (idx < 0 || idx >= sessions.length - 1) return null;
+        return sessions[idx + 1];
+    }
+
+    // MediaRecorder WebM often has a missing or 1s Duration header. SourceBuffer.buffered is the
+    // real timeline; without setting MediaSource.duration to match, the <video> can end at ~1s.
+    _mseSetDurationFromBuffer(ctx) {
+        if (!ctx || !ctx.mediaSource) return;
+        const duration = ctx.totalMse || 0;
+        if (!Number.isFinite(duration) || duration <= 0) return;
+        try {
+            ctx.mediaSource.duration = duration;
+        } catch (e) { /* duration is best-effort */ }
+    }
+
+    _mseVideoSnap(extra = {}) {
+        const v = this.flashbackVideo;
+        let buffered = 0;
+        try {
+            if (v && v.buffered && v.buffered.length) {
+                buffered = v.buffered.end(v.buffered.length - 1);
+            }
+        } catch (e) { /* diagnostic */ }
+        return {
+            t: v ? Number((v.currentTime || 0).toFixed(2)) : null,
+            dur: v && Number.isFinite(v.duration) ? Number(v.duration.toFixed(2)) : (v ? String(v.duration) : null),
+            paused: v ? !!v.paused : null,
+            ended: v ? !!v.ended : null,
+            ready: v ? v.readyState : null,
+            buffered: Number(buffered.toFixed(2)),
+            ...extra
+        };
     }
 
     // Bounds for the on-demand buffered window. Appending every retained segment into one SourceBuffer
@@ -5609,6 +6487,7 @@ class FlashbackRecorder {
                     continue;
                 }
                 if (ctx.hiIdx >= ctx.lastIdx && !ctx.endedStream) {
+                    this._mseSetDurationFromBuffer(ctx);
                     try { ctx.mediaSource.endOfStream(); } catch (e) { /* noop */ }
                     ctx.endedStream = true;
                 }
@@ -5693,6 +6572,7 @@ class FlashbackRecorder {
             }
             ctx.loIdx = ctx.segMap.length ? ctx.segMap[0].idx : 0;
             if (ctx.hiIdx >= ctx.lastIdx) {
+                this._mseSetDurationFromBuffer(ctx);
                 try { mediaSource.endOfStream(); } catch (e) { /* noop */ }
                 ctx.endedStream = true;
             }
@@ -5709,9 +6589,17 @@ class FlashbackRecorder {
             try { URL.revokeObjectURL(objectUrl); } catch (e) { /* noop */ }
             return null;
         }
+        let buffered = 0;
+        try {
+            if (ctx.sourceBuffer && ctx.sourceBuffer.buffered.length) {
+                buffered = ctx.sourceBuffer.buffered.end(ctx.sourceBuffer.buffered.length - 1);
+            }
+        } catch (e) { /* buffered is diagnostic */ }
         this.dlog('mse:build-ok', {
             windowSegments: ctx.segMap.length, ofEntries: entries.length,
             bytesMB: Number((ctx.bytesBuffered / 1048576).toFixed(1)),
+            buffered: Number(buffered.toFixed(2)),
+            expected: Number(Math.max(0, ctx.windowEndAbs - ctx.windowStartAbs).toFixed(2)),
             loIdx: ctx.loIdx, hiIdx: ctx.hiIdx, lastIdx: ctx.lastIdx, endedStream: ctx.endedStream
         });
         return ctx;
@@ -5757,7 +6645,18 @@ class FlashbackRecorder {
     // full entry list, not just the buffered run.
     _syncFlashbackIndex(absTime) {
         const ctx = this._mse;
-        if (!ctx) return;
+        if (!ctx) {
+            const sessions = this.allSessions || [];
+            for (let i = 0; i < sessions.length; i++) {
+                const end = sessions[i].absoluteEnd ?? sessions[i].visibleEndAbs ?? 0;
+                if (absTime <= end + 0.05) {
+                    this.currentFlashbackIndex = i;
+                    return;
+                }
+            }
+            this.currentFlashbackIndex = Math.max(0, sessions.length - 1);
+            return;
+        }
         const entries = ctx.entries || [];
         for (let i = 0; i < entries.length; i++) {
             if (absTime <= entries[i].absEnd) { this.currentFlashbackIndex = i; return; }
@@ -5773,25 +6672,50 @@ class FlashbackRecorder {
 
         this._timeupdateHandler = () => {
             if (this._flashbackId !== fbId) { this._detachFlashbackHandlers(); return; }
-            this._syncFlashbackIndex(this._mseToAbs(video.currentTime || 0));
+            const t = video.currentTime || 0;
+            if (this._lastMseTimeLog == null || t - this._lastMseTimeLog >= 0.9) {
+                this._lastMseTimeLog = t;
+                this.dlog('mse:time', this._mseVideoSnap({}));
+            }
+            const abs = this._blobPlaybackUrl
+                ? (this._blobPlaybackAbsStart || 0) + t
+                : this._mseToAbs(t);
+            this._syncFlashbackIndex(abs);
             this.updateTimeline();
             this.updateAllPlaybackPositions();
-            this._pumpFlashback(fbId); // feed the window ahead / evict behind as playback advances
+            if (!this._blobPlaybackUrl) {
+                this._pumpFlashback(fbId);
+            }
         };
         this._onEndedHandler = () => {
             if (this._flashbackId !== fbId) return;
-            // Reached the live edge of the retained window — hand back to live recording.
+            this.dlog('mse:ended', this._mseVideoSnap({}));
+            if (this._blobPlaybackUrl) {
+                const next = this._nextFlashbackSession();
+                if (next) {
+                    const start = next.absoluteStart ?? next.visibleStartAbs ?? 0;
+                    this._playFlashbackViaObjectUrl(next, start, fbId);
+                    return;
+                }
+            }
             this.resumeRecordingAfterFlashback();
         };
         this._onErrorHandler = () => {
             if (this._flashbackId !== fbId) return;
+            this.dlog('mse:error', this._mseVideoSnap({
+                code: video.error && video.error.code,
+                message: video.error && video.error.message
+            }));
             this.showMessage('Flashback playback error', 'error');
             this.resumeRecordingAfterFlashback();
         };
         // If playback outruns the buffered window, feed it more rather than stalling.
         this._onWaitingHandler = () => {
             if (this._flashbackId !== fbId) return;
-            this._pumpFlashback(fbId);
+            this.dlog('mse:waiting', this._mseVideoSnap({}));
+            if (!this._blobPlaybackUrl) {
+                this._pumpFlashback(fbId);
+            }
         };
         video.addEventListener('timeupdate', this._timeupdateHandler);
         video.addEventListener('ended', this._onEndedHandler);
@@ -5893,6 +6817,7 @@ class FlashbackRecorder {
             this.clearFlashbackMonitors();
             this._detachFlashbackHandlers();
             this._teardownMse();
+            this._teardownBlobPlayback();
             // Completely clean up the video element (flashbackVideo and videoPreview are the same reference)
             if (this.flashbackVideo) {
                 this.flashbackVideo.pause();
@@ -5941,6 +6866,14 @@ class FlashbackRecorder {
                 this.mirrorMode = this.configMirrorToggle.checked;
                 this.applyMirrorMode();
                 this.saveSettings();
+            });
+        }
+        if (this.configAutoStartToggle) {
+            this.configAutoStartToggle.checked = this.autoStartRecording;
+            this.configAutoStartToggle.addEventListener('change', () => {
+                this.autoStartRecording = this.configAutoStartToggle.checked;
+                this.saveSettings();
+                this.refreshOnboardingAfterCaptureChange();
             });
         }
 
@@ -6154,6 +7087,9 @@ class FlashbackRecorder {
 
     getCurrentAbsoluteTime() {
         if (this.state === 'flashback' || this.state === 'flashbackPaused') {
+            if (this._blobPlaybackUrl && this.flashbackVideo) {
+                return (this._blobPlaybackAbsStart || 0) + (this.flashbackVideo.currentTime || 0);
+            }
             // The flashback plays a single stitched MediaSource timeline; map its position back to
             // absolute recording time.
             if (this._mse && this.flashbackVideo) {

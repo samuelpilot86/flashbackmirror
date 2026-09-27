@@ -14,10 +14,19 @@
             <video id="videoPreview" autoplay muted playsinline></video>
             <div class="video-overlay" id="videoOverlay">
                 <span class="status-dot" id="stateIndicatorDot"></span>
-                <span class="status-label" id="stateIndicatorLabel">REC</span>
+                <span class="status-label" id="stateIndicatorLabel">READY</span>
             </div>
             <div class="alerts-container" id="alertsContainer"></div>
             <div class="time-offset-overlay" id="timeOffsetOverlay" style="display: none;"></div>
+            <div class="capture-start-panel" id="captureStartPanel" hidden>
+                <div class="capture-start-panel-inner">
+                    <h2 class="capture-start-title" id="captureStartTitle">Recording didn't start</h2>
+                    <p class="capture-start-body" id="captureStartBody"></p>
+                    <button type="button" class="btn btn-primary capture-start-retry" id="captureStartRetryBtn">
+                        <span class="btn-label">Allow camera &amp; start</span>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Timeline -->
@@ -62,7 +71,7 @@
         <div class="bottom-controls-row">
             <!-- Controls -->
             <div class="controls">
-                <button class="btn btn-danger" id="shiftBtn"><span class="btn-label">Stop</span><span class="btn-key">[Space]</span></button>
+                <button class="btn btn-primary" id="shiftBtn"><span class="btn-label">Record</span><span class="btn-key">[Space]</span></button>
                 <button class="btn btn-secondary" id="flashbackBtn" disabled><span class="btn-label">Flashback</span><span class="btn-key">[←]</span></button>
                 <button class="btn btn-secondary" id="forwardBtn" disabled><span class="btn-label">Forward</span><span class="btn-key">[→]</span></button>
                 <button class="btn btn-secondary" id="addMarkerBtn" disabled><span class="btn-label">Mark ⏱</span><span class="btn-key">[Shift]</span></button>
@@ -148,6 +157,16 @@
             <!-- Recording -->
             <div class="config-section">
                 <div class="config-section-title">Recording</div>
+                <div class="config-field config-field--row">
+                    <label class="config-label config-label--icon" for="configAutoStartToggle">
+                        <svg class="config-label-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/>
+                        </svg>
+                        Start recording on launch
+                    </label>
+                    <input type="checkbox" id="configAutoStartToggle" class="config-toggle">
+                </div>
                 <div class="config-field">
                     <label class="config-label">Maximum recording duration</label>
                     <div class="duration-control">
@@ -183,6 +202,14 @@
                     </svg>
                     Debugging logs
                 </button>
+                <button type="button" class="config-action-btn" id="bugReportBtn">
+                    <svg class="config-label-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 8v5"/>
+                        <path d="M12 16h.01"/>
+                    </svg>
+                    Report a bug
+                </button>
             </div>
         </div>
     </div>
@@ -200,6 +227,36 @@
             <div class="logs-modal-footer">
                 <button type="button" class="logs-btn" id="logsCopyBtn">Copy again</button>
                 <button type="button" class="logs-btn logs-btn--primary" id="logsCloseBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bug report modal -->
+    <div class="logs-modal" id="bugReportModal" hidden>
+        <div class="logs-modal-backdrop" id="bugReportBackdrop"></div>
+        <div class="logs-modal-dialog bug-report-dialog" role="dialog" aria-modal="true" aria-labelledby="bugReportTitle">
+            <div class="logs-modal-header">
+                <h3 id="bugReportTitle">Report a bug</h3>
+                <button type="button" class="logs-modal-close" id="bugReportClose" aria-label="Close">✕</button>
+            </div>
+            <div class="logs-modal-status" id="bugReportStatus"></div>
+            <div class="bug-report-body">
+                <label class="bug-report-label" for="bugReportMessage">What happened? (optional)</label>
+                <textarea class="bug-report-message" id="bugReportMessage" rows="5" maxlength="4000" placeholder="What did you expect, and what did you see instead?"></textarea>
+                <label class="bug-report-label" for="bugReportContact">How can we reach you when this is fixed? (optional)</label>
+                <input type="text" class="bug-report-contact" id="bugReportContact" maxlength="200" placeholder="Email, phone, or any contact — optional" autocomplete="email">
+                <label class="bug-report-check">
+                    <input type="checkbox" id="bugReportScreenshot" checked>
+                    Include a screenshot of the interface (the camera image is heavily blurred)
+                </label>
+                <div class="bug-report-preview" id="bugReportPreview" hidden>
+                    <img id="bugReportPreviewImg" alt="Screenshot preview (camera blurred)">
+                    <p class="bug-report-preview-empty" id="bugReportPreviewEmpty" hidden>Could not capture a preview.</p>
+                </div>
+            </div>
+            <div class="logs-modal-footer">
+                <button type="button" class="logs-btn" id="bugReportCancelBtn">Cancel</button>
+                <button type="button" class="logs-btn logs-btn--primary" id="bugReportSendBtn">Send report to Samuel</button>
             </div>
         </div>
     </div>

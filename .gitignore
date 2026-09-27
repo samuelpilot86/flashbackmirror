@@ -25,3 +25,8 @@ npm-debug.log*
 # Sauvegardes locales HTML / archives (non déployées)
 docs/index *.html
 docs/old/
+
+# Cloudflare Worker local toolchain
+.wrangler/
+relay/bug-report/node_modules/
+

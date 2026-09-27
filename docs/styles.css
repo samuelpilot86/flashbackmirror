@@ -64,7 +64,7 @@ body {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background-color: #EF4444;
+    background-color: #6B7280;
 }
 
 .status-label {
@@ -154,6 +154,47 @@ body {
     background: rgba(0, 0, 0, 0.75);
     color: white;
     border: none;
+}
+
+.capture-start-panel {
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.82);
+}
+
+.capture-start-panel[hidden] {
+    display: none;
+}
+
+.capture-start-panel-inner {
+    max-width: 520px;
+    text-align: center;
+    color: white;
+}
+
+.capture-start-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.capture-start-body {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.55;
+    white-space: pre-line;
+    margin-bottom: 20px;
+    color: #E2E8F0;
+}
+
+.capture-start-retry {
+    margin: 0 auto;
+    flex-direction: row;
 }
 
 .bottom-controls-row {
@@ -916,6 +957,113 @@ body {
 
 .logs-btn--primary:hover {
     background: #1D4ED8;
+}
+
+.logs-btn:disabled,
+.logs-btn--primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.config-action-btn + .config-action-btn {
+    margin-top: 8px;
+}
+
+.bug-report-dialog {
+    max-width: 520px;
+    max-height: 88vh;
+}
+
+.bug-report-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.bug-report-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.bug-report-message {
+    width: 100%;
+    min-height: 110px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.45;
+    color: #1E293B;
+    background: #F9FAFB;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    resize: vertical;
+}
+
+.bug-report-message:focus,
+.bug-report-contact:focus {
+    outline: none;
+    border-color: #2563EB;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.bug-report-contact {
+    width: 100%;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.45;
+    color: #1E293B;
+    background: #F9FAFB;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+}
+
+.bug-report-preview {
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #111827;
+}
+
+.bug-report-preview img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 240px;
+    object-fit: contain;
+    background: #111827;
+}
+
+.bug-report-preview-empty {
+    margin: 0;
+    padding: 14px 12px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #9CA3AF;
+    text-align: center;
+    background: #1F2937;
+}
+
+.bug-report-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #374151;
+    cursor: pointer;
+}
+
+.bug-report-check input {
+    margin-top: 2px;
+}
+
+.logs-modal-status--idle {
+    color: #475569;
+    background: #F8FAFC;
+    border-bottom-color: #E2E8F0;
 }
 
 .config-select {

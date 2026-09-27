@@ -12,7 +12,8 @@
 | Mise à jour du site | `git commit` + `git push` des changements sous `docs/` (délai côté GitHub) |
 | Source de code | Travailler **directement dans `docs/`** — le dossier `App/` n’existe pas dans ce dépôt |
 | Assets | `Logo/` à la racine ; référencer depuis `docs/` en chemins relatifs si besoin |
-| Test local | Servir `docs/` en HTTP (ex. `npx --yes serve docs` depuis la racine), pas seulement `file://` (caméra / APIs) |
+| Test local | Servir `docs/` en HTTP (ex. `python3 -m http.server 4173` dans `docs/`, ou `npx --yes serve docs` depuis la racine), pas seulement `file://` (caméra / APIs) |
+| Signalement de bug | Bouton **Report a bug** (panneau ⚙) → relais Cloudflare `relay/bug-report/` → issue GitHub + lien d’examen Cursor |
 
 ## Git — fichiers à ne pas versionner
 
@@ -22,6 +23,19 @@ Ces motifs sont dans **`.gitignore`** : ne pas les ajouter au dépôt ni propose
 - `docs/old/` — archives HTML locales.
 
 Ne retirer ces règles du `.gitignore` qu’avec accord explicite du mainteneur.
+
+## Signalement de bug (relais GitHub)
+
+L’app poste vers `BUG_REPORT_ENDPOINT` dans `docs/script.js` (Worker `relay/bug-report/`). Tant que l’URL est vide, **Send report** copie les logs dans le presse-papiers.
+
+Pour activer l’envoi d’issues :
+
+1. Créer un PAT GitHub (fine-grained) sur `samuelpilot86/flashbackmirror` : **Issues: write**, **Contents: write**.
+2. Dans `relay/bug-report/` : `npx wrangler login` puis `npx wrangler secret put GITHUB_TOKEN`.
+3. `npx wrangler deploy`, coller l’URL `https://….workers.dev` dans `BUG_REPORT_ENDPOINT`.
+4. La branche `reports` est créée automatiquement (fichiers du signalement). GitHub Pages reste sur `main` / `docs/`.
+
+L’issue contient un lien [deeplink prompt Cursor](https://cursor.com/link/prompt) : examen + plan, **pas de code** tant que le mainteneur n’a pas validé.
 
 ## Conventions de travail (équipe / utilisateur)
 

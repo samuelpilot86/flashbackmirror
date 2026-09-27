@@ -1,0 +1,6 @@
+name = "flashback-bug-report"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[vars]
+GITHUB_REPO = "samuelpilot86/flashbackmirror"
