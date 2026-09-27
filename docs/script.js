@@ -489,6 +489,7 @@ class FlashbackRecorder {
     constructor() {
         // DOM Elements
         this.videoPreview = document.getElementById('videoPreview');
+        this.catchupHold = document.getElementById('catchupHold');
         this.shiftBtn = document.getElementById('shiftBtn');
         this.flashbackBtn = document.getElementById('flashbackBtn');
         this.waveformCanvas = document.getElementById('waveformCanvas');
@@ -598,6 +599,8 @@ class FlashbackRecorder {
         this.flashbackVideo = null;
         this.allSessions = [];
         this._mse = null; // MediaSource context stitching the retained segments into one gapless timeline during flashback
+        this._fbCatchup = null; // Hidden fast-forward from the segment keyframe to the clicked instant
+        this._fbCatchupRaf = 0;
         this.currentReferencePosition = null;
         this.backPressCount = 0;
         this.forwardPressCount = 0;
@@ -609,7 +612,7 @@ class FlashbackRecorder {
         this.totalRecordedTime = 0;
         this.maxDuration = 600; // seconds
         this.bufferMarginSeconds = 20; // extra margin to ensure an earlier keyframe (>= segment length so whole-segment eviction never bisects)
-        this.segmentDurationSeconds = 15; // rotate the recorder this often so each segment is a self-contained, decodable WebM
+        this.segmentDurationSeconds = 3; // rotate the recorder this often so each segment is a self-contained, decodable WebM
         this._segmentRotationTimer = null; // interval that triggers periodic recorder rotation
         this._rotating = false; // true while a rotation is in progress (suppresses the onstop auto-save)
         this.lifetimeRecordedDuration = 0; // total duration recorded since launch (monotonic)
@@ -4004,6 +4007,7 @@ class FlashbackRecorder {
     }
 
     startTimer() {
+        this.stopTimer();
         this.timerInterval = setInterval(() => {
             this.updateTimeline();
         }, 100);
@@ -6009,149 +6013,127 @@ class FlashbackRecorder {
     }
 
     // === FLASHBACK PLAYBACK (MediaSource) ===
-    // The retained segments are self-contained WebM files. Stitching them into a single MediaSource
-    // SourceBuffer (mode 'sequence') yields ONE continuous, gapless timeline with a real finite
-    // duration — no per-segment reload seams and no reliance on the unknown per-blob duration.
-    // A small map converts between absolute recording time and MediaSource time.
+    // Each segment is a self-contained WebM that starts on a keyframe. Firefox plays that
+    // one file from the start, quickly and muted, until the clicked instant, then at normal
+    // speed. Stitching a second segment into MediaSource opens a hole after one second, so
+    // Firefox never does that. Other browsers stitch a windowed MediaSource.
 
     async playFlashbackFromTimestamp(timestamp) {
         if (!Number.isFinite(timestamp)) {
             timestamp = 0;
         }
-        // seekFlashback bumped _flashbackId; capture it so async work can detect interruption.
         const fbId = this._flashbackId;
         const sessions = this.recordedSessions || [];
         if (sessions.length === 0) {
+            this._failFlashback('no-sessions');
             return;
         }
         this.allSessions = [...sessions];
 
         const session = sessions.find(s => timestamp <= ((s.absoluteEnd ?? s.visibleEndAbs ?? 0) + 0.05))
             || sessions[sessions.length - 1];
-        if (session) {
-            const played = await this._playFlashbackViaObjectUrl(session, timestamp, fbId);
-            if (played) {
+        const mime = (session && session.mimeType) || this.activeMimeType || 'video/webm';
+        const firefox = /Firefox\//i.test(navigator.userAgent || '');
+        const mseSupported = !firefox && !!(window.MediaSource && MediaSource.isTypeSupported(mime));
+
+        this._cancelCatchupLoop();
+        this._fbCatchup = null;
+        this._showCatchupHold();
+
+        try {
+            if (!mseSupported) {
+                this.dlog(firefox ? 'flashback:firefox-segment' : 'flashback:mse-unsupported', { mime });
+                const played = session
+                    ? await this._playFlashbackViaObjectUrl(session, timestamp, fbId)
+                    : false;
+                if (this._flashbackId !== fbId) return;
+                if (!played) this._failFlashback('blob-play-failed');
                 return;
             }
-        }
 
-        // (Re)build the windowed MediaSource when there isn't a usable one, the segment set changed,
-        // or the requested time falls outside the currently-buffered run. Back/forward presses that
-        // stay inside the buffered run reuse it and just re-seek; larger jumps rebuild the window
-        // around the new target.
-        const needRebuild = !this._mse || !this._mse.ready
-            || this._mse.segCount !== sessions.length
-            || !this._fbTargetInRun(this._mse, timestamp);
-        if (needRebuild) {
             this.clearFlashbackMonitors();
             this._teardownMse();
             this._teardownBlobPlayback();
-            // Attach the video element up front: a MediaSource only fires 'sourceopen' once it is
-            // bound to a media element, so _buildFlashbackMediaSource needs the element ready.
+            this._mse = null;
             this.flashbackVideo = this.videoPreview;
-            this.videoPreview.srcObject = null;
-            this.videoPreview.muted = false;
+            if (this.videoPreview) this.videoPreview.srcObject = null;
+
             const built = await this._buildFlashbackMediaSource(sessions, timestamp);
             if (this._flashbackId !== fbId) {
-                // A newer flashback superseded this one while we were building.
                 this._teardownMse(built);
                 return;
             }
             if (!built) {
-                this.showMessage('Flashback playback error', 'error');
-                this._teardownMse();
-                this.flashbackVideo = null;
-                this.previousAbsoluteTime = null;
-                this.setState('recordingStopped');
-                this.resumeRecording();
+                this._failFlashback('mse-build-failed');
                 return;
             }
             this._mse = built;
             this.updateFlashbackVideoAudioOutput(this.currentAudioOutputDeviceId || 'default');
-        }
 
-        // Position the single timeline at the requested absolute time.
-        const mseTime = this._absToMse(timestamp);
-        try {
-            this.flashbackVideo.currentTime = mseTime;
+            const video = this.flashbackVideo;
+            if (video && (video.currentTime || 0) > 0.05) {
+                try { video.currentTime = 0; } catch (e) { /* keyframe at the start of a fresh buffer */ }
+            }
+            const mseTarget = this._absToMse(timestamp);
+
+            this._syncFlashbackIndex(timestamp);
+            this._attachFlashbackHandlers(fbId);
+            this.setState('flashback');
+            this._beginKeyframeCatchup(fbId, mseTarget, timestamp);
+            this.updateUIForFlashback();
+            this.updateDebugPanel();
+            this.startTimer();
+            this.stopPhotoExtraction();
+            this.stopPhotoTimelineRefresh();
+            this._pumpFlashback(fbId);
+
+            const tryPlay = () => this.flashbackVideo && this.flashbackVideo.play();
+            Promise.resolve()
+                .then(tryPlay)
+                .then(() => {
+                    if (this._flashbackId !== fbId) return;
+                    this.dlog('mse:play', this._mseVideoSnap({
+                        mseTarget: Number((mseTarget || 0).toFixed(2))
+                    }));
+                })
+                .catch(() => {
+                    if (this._flashbackId !== fbId) return;
+                    this.dlog('mse:play-fail', this._mseVideoSnap({}));
+                    return Promise.resolve().then(tryPlay).catch(() => {});
+                });
         } catch (e) {
-            try { this.flashbackVideo.currentTime = 0; } catch (e2) { /* noop */ }
+            if (this._flashbackId !== fbId) return;
+            this.dlog('flashback:play-error', { message: e && e.message });
+            this._failFlashback('exception');
         }
-        this._syncFlashbackIndex(timestamp);
-
-        // (Re)wire the handlers for this flashback id, transition state, and play.
-        this._attachFlashbackHandlers(fbId);
-        this.setState('flashback');
-        this.updateUIForFlashback();
-        this.updateDebugPanel();
-        this.startTimer();
-        this.stopPhotoExtraction();
-        this.stopPhotoTimelineRefresh();
-
-        // Keep the sliding window fed ahead of / evicted behind the play head for this flashback.
-        this._pumpFlashback(fbId);
-
-        const tryPlay = () => this.flashbackVideo && this.flashbackVideo.play();
-        Promise.resolve()
-            .then(tryPlay)
-            .then(() => {
-                if (this._flashbackId !== fbId) return;
-                this.dlog('mse:play', this._mseVideoSnap({ mseTime: Number((mseTime || 0).toFixed(2)) }));
-            })
-            .catch(() => {
-                // A rejected play() (e.g. transient autoplay/power-save interruption) shouldn't kill
-                // the flashback — retry once; if it still fails, stay paused in flashback.
-                if (this._flashbackId !== fbId) return;
-                this.dlog('mse:play-fail', this._mseVideoSnap({}));
-                return Promise.resolve().then(tryPlay).catch(() => {});
-            });
     }
 
+    // Firefox plays one segment file from its first image. Stitching a second segment into
+    // MediaSource leaves a hole after one second, and seeking inside the file freezes the picture.
     async _playFlashbackViaObjectUrl(session, timestamp, fbId) {
         const absStart = session.absoluteStart ?? session.visibleStartAbs ?? 0;
-        // A second click in the same segment reloads that file instead of seeking it in place.
-        // Firefox freezes the picture if currentTime moves inside a playing MediaRecorder WebM.
-        const sameBlob = !!this._blobPlaybackUrl
-            && this._blobPlaybackSessionId === session.id
-            && this.flashbackVideo;
-        if (!sameBlob) {
-            const blob = this.buildFlashbackSessionBlob(session);
-            if (!blob || blob.size === 0) {
-                this.dlog('flashback:blob-play-fail', { reason: 'empty-blob' });
-                return false;
-            }
-
-            this.clearFlashbackMonitors();
-            this._teardownMse();
-            this._mse = null;
-            if (this._blobPlaybackUrl) {
-                try { URL.revokeObjectURL(this._blobPlaybackUrl); } catch (e) { /* noop */ }
-            }
-            this._blobPlaybackUrl = URL.createObjectURL(blob);
-            this._blobPlaybackAbsStart = absStart;
-            this._blobPlaybackSessionId = session.id;
-        } else {
-            // Seeking a MediaRecorder WebM that is already playing freezes the picture in
-            // Firefox until the next keyframe (often the next segment). Reloading the same
-            // file makes the decoder start from the keyframe, then we seek before play.
-            this._detachFlashbackHandlers();
-            try { this.flashbackVideo.pause(); } catch (e) { /* noop */ }
-            this.flashbackVideo.removeAttribute('src');
-            try { this.flashbackVideo.load(); } catch (e) { /* noop */ }
+        const blob = this.buildFlashbackSessionBlob(session);
+        if (!blob || blob.size === 0) {
+            this.dlog('flashback:blob-play-fail', { reason: 'empty-blob' });
+            return false;
         }
+
+        this.clearFlashbackMonitors();
+        this._teardownMse();
+        this._mse = null;
+        if (this._blobPlaybackUrl) {
+            try { URL.revokeObjectURL(this._blobPlaybackUrl); } catch (e) { /* noop */ }
+        }
+        this._blobPlaybackUrl = URL.createObjectURL(blob);
+        this._blobPlaybackAbsStart = absStart;
+        this._blobPlaybackSessionId = session.id;
         this.flashbackVideo = this.videoPreview;
         const video = this.videoPreview;
         video.srcObject = null;
-        video.muted = false;
+        video.muted = true;
 
-        // Listen before assigning src: Firefox often fires loadedmetadata immediately,
-        // and a late listener used to wait out the 4s timeout.
         const loadStarted = Date.now();
         await new Promise((resolve) => {
-            if (video.readyState >= 1 && video.src === this._blobPlaybackUrl) {
-                resolve();
-                return;
-            }
             let settled = false;
             const done = () => {
                 if (settled) return;
@@ -6162,63 +6144,249 @@ class FlashbackRecorder {
             const timeout = setTimeout(done, 1500);
             video.addEventListener('loadedmetadata', done, { once: true });
             video.src = this._blobPlaybackUrl;
-            if (video.readyState >= 1) {
-                done();
-            }
+            if (video.readyState >= 1) done();
         });
-        if (this._flashbackId !== fbId) {
-            return true;
-        }
+        if (this._flashbackId !== fbId) return true;
 
-        const duration = video.duration;
+        if ((video.currentTime || 0) > 0.05) {
+            try { video.currentTime = 0; } catch (e) { /* already at the keyframe */ }
+        }
+        const localTime = Math.max(0, timestamp - absStart);
         this.dlog('flashback:blob-play', {
-            duration: Number.isFinite(duration) ? Number(duration.toFixed(2)) : duration,
             sessionDuration: Number((session.duration || 0).toFixed(2)),
             absStart: Number(absStart.toFixed(2)),
-            sizeKB: sameBlob ? undefined : Math.round(blob.size / 1024),
+            sizeKB: Math.round(blob.size / 1024),
             waitedMs: Date.now() - loadStarted,
-            reload: sameBlob,
-            mime: (sameBlob ? this.activeMimeType : blob.type) || this.activeMimeType
+            localTime: Number(localTime.toFixed(2)),
+            mime: blob.type || this.activeMimeType
         });
-
-        const localTime = Math.max(0, timestamp - absStart);
-        if (localTime > 0.05) {
-            const seeked = new Promise((resolve) => {
-                let settled = false;
-                const done = () => {
-                    if (settled) return;
-                    settled = true;
-                    clearTimeout(timeout);
-                    video.removeEventListener('seeked', done);
-                    resolve();
-                };
-                const timeout = setTimeout(done, 400);
-                video.addEventListener('seeked', done);
-            });
-            try { video.currentTime = localTime; } catch (e) { /* seek best-effort */ }
-            await seeked;
-        }
-        if (this._flashbackId !== fbId) {
-            return true;
-        }
-        this._lastMseTimeLog = null;
 
         this._syncFlashbackIndex(timestamp);
         this._attachFlashbackHandlers(fbId);
         this.setState('flashback');
+        this._beginKeyframeCatchup(fbId, localTime, timestamp);
         this.updateUIForFlashback();
         this.updateDebugPanel();
         this.startTimer();
         this.stopPhotoExtraction();
         this.stopPhotoTimelineRefresh();
         this.updateFlashbackVideoAudioOutput(this.currentAudioOutputDeviceId || 'default');
-        const tryPlay = () => this.flashbackVideo && this.flashbackVideo.play();
+        const tryPlay = () => video.play();
         Promise.resolve().then(tryPlay).catch(() => {
             if (this._flashbackId !== fbId) return;
             return Promise.resolve().then(tryPlay).catch(() => {});
         });
-        this.dlog('flashback:blob-playing', this._mseVideoSnap({}));
         return true;
+    }
+
+    _showCatchupHold() {
+        const video = this.videoPreview;
+        const hold = this.catchupHold;
+        if (!hold) return;
+        if (!video || video.readyState < 2 || !video.videoWidth) {
+            hold.hidden = true;
+            return;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        try {
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            hold.src = canvas.toDataURL('image/jpeg', 0.85);
+            hold.style.transform = video.style.transform || '';
+            hold.hidden = false;
+        } catch (e) {
+            hold.hidden = true;
+        }
+    }
+
+    _hideCatchupHold() {
+        const hold = this.catchupHold;
+        if (!hold) return;
+        hold.hidden = true;
+        hold.removeAttribute('src');
+    }
+
+    _resetCatchupPresentation() {
+        this._cancelCatchupLoop();
+        this._fbCatchup = null;
+        const video = this.videoPreview;
+        if (video) {
+            this._setPlaybackRate(video, 1);
+            video.style.opacity = '';
+        }
+        this._hideCatchupHold();
+    }
+
+    _setPlaybackRate(video, rate) {
+        if (!video) return;
+        try {
+            video.playbackRate = rate;
+        } catch (e) {
+            try { video.playbackRate = 1; } catch (e2) { /* noop */ }
+        }
+    }
+
+    _cancelCatchupLoop() {
+        if (this._fbCatchupRaf) {
+            cancelAnimationFrame(this._fbCatchupRaf);
+            this._fbCatchupRaf = 0;
+        }
+    }
+
+    // A single segment file can be played fast: Firefox reaches a point several seconds in
+    // without stalling, as long as the file is not stitched into MediaSource. The previous
+    // picture stays up until the playhead reaches the click, then playback continues at
+    // normal speed. If the fast pass stops advancing, fall back to normal speed on screen.
+    _beginKeyframeCatchup(fbId, mediaTarget, absTarget) {
+        const video = this.flashbackVideo;
+        if (!video) return;
+        if (!(mediaTarget > 0.05)) {
+            this._playFromKeyframe(fbId);
+            return;
+        }
+        this._cancelCatchupLoop();
+        this._fbCatchup = {
+            fbId,
+            absTarget,
+            mediaTarget,
+            wall: 0,
+            tickAt: null,
+            startedAt: Date.now(),
+            lastT: 0,
+            lastMove: Date.now()
+        };
+        video.muted = true;
+        video.style.opacity = '0';
+        this._setPlaybackRate(video, 16);
+        this.dlog('flashback:catchup-start', {
+            mediaTarget: Number(mediaTarget.toFixed(2)),
+            absTarget: Number((absTarget || 0).toFixed(2))
+        });
+        const tick = () => {
+            const catchup = this._fbCatchup;
+            if (!catchup || catchup.fbId !== fbId || this._flashbackId !== fbId) return;
+            const v = this.flashbackVideo;
+            if (!v) return;
+            const now = Date.now();
+            const t = v.currentTime || 0;
+            if (v.paused && t < 0.05 && now - catchup.startedAt > 1500) {
+                this.dlog('flashback:catchup-play-blocked', {});
+                this._playFromKeyframe(fbId);
+                return;
+            }
+            if (!v.paused) {
+                if (catchup.tickAt) catchup.wall += now - catchup.tickAt;
+                catchup.tickAt = now;
+            } else {
+                catchup.tickAt = null;
+            }
+            if (t > catchup.lastT + 0.08) {
+                catchup.lastT = t;
+                catchup.lastMove = now;
+            } else if (!v.paused && now - catchup.lastMove > 400 && t + 0.25 < catchup.mediaTarget) {
+                if ((v.playbackRate || 1) > 4) {
+                    this.dlog('flashback:catchup-slow', {
+                        t: Number(t.toFixed(2)),
+                        rate: v.playbackRate
+                    });
+                    this._setPlaybackRate(v, 4);
+                    catchup.lastT = t;
+                    catchup.lastMove = now;
+                } else {
+                    this.dlog('flashback:catchup-stall', {
+                        t: Number(t.toFixed(2)),
+                        mediaTarget: Number(catchup.mediaTarget.toFixed(2))
+                    });
+                    this._playFromKeyframe(fbId);
+                    return;
+                }
+            }
+            const remaining = catchup.mediaTarget - t;
+            if (remaining <= 0.04 || v.ended) {
+                this._finishKeyframeCatchup(v, 'reached');
+                return;
+            }
+            if (!v.paused) {
+                if (remaining < 0.35) this._setPlaybackRate(v, 1);
+                else if (remaining < 1.2) this._setPlaybackRate(v, 4);
+                else this._setPlaybackRate(v, 16);
+            }
+            this._fbCatchupRaf = requestAnimationFrame(tick);
+        };
+        this._fbCatchupRaf = requestAnimationFrame(tick);
+    }
+
+    // Normal-speed playback from the segment keyframe. The picture and the cursor follow
+    // the film; nothing stays hidden waiting for a jump the decoder cannot make.
+    _playFromKeyframe(fbId) {
+        const video = this.flashbackVideo;
+        if (!video) return;
+        this._cancelCatchupLoop();
+        this._fbCatchup = null;
+        this._setPlaybackRate(video, 1);
+        video.muted = false;
+        video.style.opacity = '';
+        this.dlog('flashback:play-from-keyframe', this._mseVideoSnap({}));
+        const started = Date.now();
+        let lastT = video.currentTime || 0;
+        let lastMove = started;
+        const tick = () => {
+            if (this._flashbackId !== fbId) return;
+            const v = this.flashbackVideo;
+            if (!v) return;
+            const t = v.currentTime || 0;
+            if (t > 0.05) this._hideCatchupHold();
+            const now = Date.now();
+            if (t > lastT + 0.05) {
+                lastT = t;
+                lastMove = now;
+            }
+            if (t > 0.2) return;
+            if (!v.paused && now - lastMove > 1200) {
+                this.dlog('flashback:keyframe-stall', this._mseVideoSnap({}));
+                this._hideCatchupHold();
+                this._setPlaybackRate(v, 1);
+                try { v.currentTime = 0; } catch (e) { /* keyframe */ }
+                try { v.play(); } catch (e) { /* noop */ }
+                return;
+            }
+            if (now - started > 2000) {
+                this._hideCatchupHold();
+                return;
+            }
+            this._fbCatchupRaf = requestAnimationFrame(tick);
+        };
+        this._fbCatchupRaf = requestAnimationFrame(tick);
+    }
+
+    _finishKeyframeCatchup(video, why) {
+        this._cancelCatchupLoop();
+        this._fbCatchup = null;
+        const v = video || this.flashbackVideo;
+        if (v) {
+            this._setPlaybackRate(v, 1);
+            v.muted = false;
+            v.style.opacity = '';
+        }
+        this._hideCatchupHold();
+        this.dlog('flashback:catchup-done', this._mseVideoSnap({ why: why || 'done' }));
+        this.updateTimeline();
+        this.updateAllPlaybackPositions();
+    }
+
+    _failFlashback(reason) {
+        this.dlog('flashback:fail', { reason, state: this.state });
+        this._resetCatchupPresentation();
+        this._detachFlashbackHandlers();
+        this._teardownMse();
+        this._teardownBlobPlayback();
+        this.flashbackVideo = null;
+        this.previousAbsoluteTime = null;
+        if (this.videoPreview) this.videoPreview.muted = true;
+        this.showMessage('Flashback playback error', 'error');
+        this.setState('recordingStopped');
+        this.resumeRecording();
     }
 
     _teardownBlobPlayback() {
@@ -6251,9 +6419,15 @@ class FlashbackRecorder {
     _mseVideoSnap(extra = {}) {
         const v = this.flashbackVideo;
         let buffered = 0;
+        let ranges = '';
         try {
             if (v && v.buffered && v.buffered.length) {
+                const parts = [];
+                for (let i = 0; i < v.buffered.length; i++) {
+                    parts.push(v.buffered.start(i).toFixed(2) + '-' + v.buffered.end(i).toFixed(2));
+                }
                 buffered = v.buffered.end(v.buffered.length - 1);
+                ranges = parts.join(',');
             }
         } catch (e) { /* diagnostic */ }
         return {
@@ -6263,6 +6437,7 @@ class FlashbackRecorder {
             ended: v ? !!v.ended : null,
             ready: v ? v.readyState : null,
             buffered: Number(buffered.toFixed(2)),
+            ranges,
             ...extra
         };
     }
@@ -6281,6 +6456,28 @@ class FlashbackRecorder {
             entry.blob = this.buildFlashbackSessionBlob(entry.session);
         }
         return entry.blob;
+    }
+
+    // Firefox often reports a short buffered end when a segment is first appended, which
+    // mapped a click at 12s to about 7s of media time. Once the window is filled, stretch
+    // each segment across the real buffered duration in proportion to its recorded length.
+    _fbRemapSegments(ctx) {
+        if (!ctx || !ctx.segMap.length) return;
+        let bufferedEnd = ctx.mseCursor || 0;
+        try {
+            const ranges = ctx.sourceBuffer && ctx.sourceBuffer.buffered;
+            if (ranges && ranges.length) bufferedEnd = ranges.end(ranges.length - 1);
+        } catch (e) { /* keep the cursor */ }
+        const abs0 = ctx.segMap[0].absStart;
+        const abs1 = ctx.segMap[ctx.segMap.length - 1].absEnd;
+        const absSpan = abs1 - abs0;
+        if (!(bufferedEnd > 0) || !(absSpan > 0)) return;
+        for (const seg of ctx.segMap) {
+            seg.mseStart = (seg.absStart - abs0) / absSpan * bufferedEnd;
+            seg.mseEnd = (seg.absEnd - abs0) / absSpan * bufferedEnd;
+        }
+        ctx.mseCursor = bufferedEnd;
+        ctx.totalMse = bufferedEnd;
     }
 
     // Append the segment at entries[idx], extending the buffered run forward. Returns true on success.
@@ -6377,9 +6574,9 @@ class FlashbackRecorder {
         }
     }
 
-    // Build a MediaSource holding a bounded window of segments around targetAbs: one segment behind
-    // (smooth small rewinds) then forward until the byte budget is hit. The pump keeps it fed/evicted
-    // as playback proceeds. Returns a context or null if even the minimal window could not be built.
+    // Build a MediaSource whose first segment is the one that contains targetAbs, then forward
+    // until the byte budget is hit. Media time 0 is that segment's keyframe. The pump keeps the
+    // window fed ahead and evicted behind. Returns null if even that segment could not be built.
     async _buildFlashbackMediaSource(sessions, targetAbs = 0) {
         const entries = sessions
             .filter(s => s && Array.isArray(s.chunks) && s.chunks.length > 0)
@@ -6436,7 +6633,9 @@ class FlashbackRecorder {
 
             let targetIdx = entries.findIndex(e => targetAbs <= e.absEnd + 0.05);
             if (targetIdx < 0) targetIdx = entries.length - 1;
-            const startIdx = Math.max(0, targetIdx - 1); // one segment of rewind headroom
+            // Start on the clicked segment so media time 0 is its keyframe. A click never
+            // seeks into the middle of a segment; it plays forward from this image.
+            const startIdx = targetIdx;
 
             // Mandatory: cover startIdx..targetIdx so the requested position is immediately playable.
             for (let i = startIdx; i <= targetIdx; i++) {
@@ -6450,6 +6649,7 @@ class FlashbackRecorder {
                 i++;
             }
             ctx.loIdx = ctx.segMap.length ? ctx.segMap[0].idx : 0;
+            this._fbRemapSegments(ctx);
             if (ctx.hiIdx >= ctx.lastIdx) {
                 this._mseSetDurationFromBuffer(ctx);
                 try { mediaSource.endOfStream(); } catch (e) { /* noop */ }
@@ -6551,6 +6751,7 @@ class FlashbackRecorder {
 
         this._timeupdateHandler = () => {
             if (this._flashbackId !== fbId) { this._detachFlashbackHandlers(); return; }
+            if (this._fbCatchup && this._fbCatchup.fbId === fbId) return;
             const t = video.currentTime || 0;
             if (this._lastMseTimeLog == null || t - this._lastMseTimeLog >= 0.9) {
                 this._lastMseTimeLog = t;
@@ -6568,6 +6769,22 @@ class FlashbackRecorder {
         };
         this._onEndedHandler = () => {
             if (this._flashbackId !== fbId) return;
+            if (this._fbCatchup && this._fbCatchup.fbId === fbId) {
+                let bufferedEnd = 0;
+                try {
+                    if (video.buffered && video.buffered.length) {
+                        bufferedEnd = video.buffered.end(video.buffered.length - 1);
+                    }
+                } catch (e) { /* diagnostic */ }
+                if (bufferedEnd > (video.currentTime || 0) + 0.3) {
+                    this.dlog('flashback:ignore-early-end', this._mseVideoSnap({
+                        bufferedEnd: Number(bufferedEnd.toFixed(2))
+                    }));
+                    try { video.play(); } catch (e) { /* keep catching up */ }
+                    return;
+                }
+                this._finishKeyframeCatchup(video, 'ended');
+            }
             this.dlog('mse:ended', this._mseVideoSnap({}));
             if (this._blobPlaybackUrl) {
                 const next = this._nextFlashbackSession();
@@ -6688,6 +6905,7 @@ class FlashbackRecorder {
 
     stopFlashbackAndResumeRecording() {
         if (this.state === 'flashback') {
+            this._resetCatchupPresentation();
             this.setState('recordingStopped');
             this.currentFlashbackIndex = 0;
             this.currentReferencePosition = null;
@@ -6964,6 +7182,9 @@ class FlashbackRecorder {
     }
 
     getCurrentAbsoluteTime() {
+        if (this._fbCatchup && Number.isFinite(this._fbCatchup.absTarget)) {
+            return this._fbCatchup.absTarget;
+        }
         if (this.state === 'flashback' || this.state === 'flashbackPaused') {
             if (this._blobPlaybackUrl && this.flashbackVideo) {
                 return (this._blobPlaybackAbsStart || 0) + (this.flashbackVideo.currentTime || 0);

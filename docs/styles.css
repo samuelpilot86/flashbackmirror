@@ -46,6 +46,19 @@ body {
     /* Mirror mode is applied via JS (applyMirrorMode) from localStorage setting */
 }
 
+.catchup-hold {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+.catchup-hold[hidden] {
+    display: none !important;
+}
+
 .video-overlay {
     position: absolute;
     top: 16px;
