@@ -11,11 +11,13 @@ body {
     background-color: #F8FAFC;
     color: #1E293B;
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
 }
 
 .main-content {
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -195,6 +197,15 @@ body {
 .capture-start-retry {
     margin: 0 auto;
     flex-direction: row;
+}
+
+/* The dock is positioned over the video further down. */
+.stage-dock {
+    display: flex;
+}
+
+.btn-icon {
+    display: none;
 }
 
 .bottom-controls-row {
@@ -380,31 +391,6 @@ body {
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
-/* Responsive timeline */
-@media (max-width: 768px) {
-    .timeline-container {
-        width: 100%;
-        max-width: 400px;
-    }
-
-    .timeline-time-display {
-        font-size: 11px;
-    }
-
-    .timeline-bar {
-        height: 20px;
-        border-radius: 10px;
-    }
-
-    .timeline-progress {
-        border-radius: 10px;
-    }
-
-.timeline-position {
-    width: 2px;
-    }
-}
-
 /* Waveform Styles */
 .waveform-container {
     width: 100%;
@@ -563,23 +549,6 @@ body {
     text-align: center;
 }
 
-@media (max-width: 768px) {
-    .video-container {
-        width: 100%;
-        max-width: calc(100vw - 48px);
-        aspect-ratio: 16 / 9;
-    }
-
-    .bottom-controls-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .controls {
-        flex-direction: column;
-        gap: 12px;
-    }
-}
 
 /* Debug Panel Styles — controlled by SHOW_DEBUG_PANEL flag in script.js */
 .debug-panel {
@@ -1361,5 +1330,238 @@ body {
     .config-panel {
         width: 100%;
         right: -100%;
+        height: 100vh;
+        height: 100dvh;
+    }
+}
+
+/* Video fills the screen. Timeline, waveform and controls sit on it. */
+    .main-content {
+        position: relative;
+        padding: 0;
+        gap: 0;
+    }
+
+    .video-container {
+        width: 100%;
+        max-width: none;
+        flex: 1;
+        aspect-ratio: auto;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .video-container:has(#captureStartPanel:not([hidden])) {
+        z-index: 20;
+    }
+
+    .video-overlay {
+        top: max(12px, env(safe-area-inset-top));
+        right: calc(max(10px, env(safe-area-inset-right)) + 52px);
+        background: rgba(0, 0, 0, 0.35);
+    }
+
+    .alerts-container {
+        top: calc(max(12px, env(safe-area-inset-top)) + 56px);
+        bottom: auto;
+    }
+
+    .time-offset-overlay {
+        top: 36%;
+    }
+
+    .config-panel-toggle {
+        top: max(10px, env(safe-area-inset-top));
+        right: max(10px, env(safe-area-inset-right));
+        bottom: auto;
+        background: rgba(15, 23, 42, 0.28);
+        color: rgba(255, 255, 255, 0.82);
+        border-color: transparent;
+        box-shadow: none;
+    }
+
+    .stage-dock {
+        display: flex;
+        flex-direction: column;
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 12;
+        gap: 4px;
+        padding: 10px 12px calc(8px + env(safe-area-inset-bottom));
+        padding-left: max(12px, env(safe-area-inset-left));
+        padding-right: max(12px, env(safe-area-inset-right));
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0.12) 58%, rgba(0, 0, 0, 0) 100%);
+        pointer-events: none;
+    }
+
+    .stage-dock .timeline-container,
+    .stage-dock .bottom-controls-row,
+    .stage-dock .btn,
+    .stage-dock .timeline-bar,
+    .stage-dock .waveform-canvas,
+    .stage-dock .photo-timeline-scroll {
+        pointer-events: auto;
+    }
+
+    .timeline-container,
+    .bottom-controls-row {
+        max-width: none;
+        width: 100%;
+    }
+
+    .timeline-time-display,
+    .timeline-lifetime,
+    .timeline-legend-text {
+        color: rgba(255, 255, 255, 0.82);
+    }
+
+    .timeline-lifetime {
+        margin-top: 2px;
+        font-size: 10px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .timeline-legend {
+        margin-top: 0;
+    }
+
+    .timeline-bar {
+        height: 10px;
+        border-radius: 5px;
+        background-color: rgba(255, 255, 255, 0.22);
+        border: none;
+    }
+
+    .timeline-progress {
+        border-radius: 5px;
+        opacity: 0.85;
+    }
+
+    .photo-timeline-scroll {
+        height: 48px;
+        background-color: rgba(0, 0, 0, 0.22);
+        border: none;
+        border-radius: 4px;
+        box-shadow: none;
+    }
+
+    .photo-timeline-scroll:hover {
+        border-color: transparent;
+        box-shadow: none;
+    }
+
+    .waveform-canvas {
+        height: 28px;
+        background-color: rgba(0, 0, 0, 0.22);
+        border: none;
+        border-radius: 4px;
+        box-shadow: none;
+    }
+
+    .waveform-canvas:hover {
+        border-color: transparent;
+        box-shadow: none;
+    }
+
+    .bottom-controls-row {
+        gap: 0;
+    }
+
+    .controls {
+        width: 100%;
+        gap: 8px;
+        justify-content: center;
+    }
+
+    .btn {
+        position: relative;
+        flex: 0 0 48px;
+        width: 48px;
+        min-width: 48px;
+        min-height: 48px;
+        padding: 0;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.9);
+        border-radius: 10px;
+        touch-action: manipulation;
+    }
+
+    .btn::before {
+        content: '';
+        position: absolute;
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: rgba(15, 23, 42, 0.34);
+        pointer-events: none;
+    }
+
+    .btn-primary,
+    .btn-danger,
+    .btn-secondary,
+    .btn-primary:hover,
+    .btn-danger:hover,
+    .btn-secondary:hover {
+        background: transparent;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    #shiftBtn {
+        margin-right: 10px;
+    }
+
+    #shiftBtn.btn-danger,
+    #shiftBtn.btn-danger:hover {
+        color: rgba(254, 202, 202, 0.95);
+    }
+
+    .btn-icon {
+        display: block;
+        position: relative;
+        z-index: 1;
+        width: 26px;
+        height: 26px;
+        opacity: 0.9;
+        filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.45));
+    }
+
+    #shiftBtn .btn-icon {
+        display: none;
+        opacity: 0.84;
+    }
+
+    #shiftBtn[data-shift="record"] .btn-icon--record,
+    #shiftBtn[data-shift="stop"] .btn-icon--stop,
+    #shiftBtn[data-shift="pause"] .btn-icon--pause,
+    #shiftBtn[data-shift="read"] .btn-icon--read {
+        display: block;
+    }
+
+    .btn-label,
+    .btn-key {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .btn:disabled {
+        opacity: 0.38;
+    }
+
+/* Snapshots need the extra room of a laptop. */
+@media (max-width: 1100px), (max-height: 680px) {
+    .photo-timeline-container,
+    .photo-timeline-container.show {
+        display: none !important;
     }
 }

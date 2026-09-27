@@ -1065,6 +1065,8 @@ class FlashbackRecorder {
         window.addEventListener('resize', waveformResizeHandler);
         // Store handler for potential cleanup
         this.waveformWindowResizeHandler = waveformResizeHandler;
+        const compactStageQuery = window.matchMedia('(max-width: 1100px), (max-height: 680px)');
+        compactStageQuery.addEventListener('change', waveformResizeHandler);
     }
 
     getContainerWidth(element) {
@@ -1087,7 +1089,7 @@ class FlashbackRecorder {
         
         // Use factorized function to get accurate container width
         const width = this.getContainerWidth(this.waveformContainer);
-        const height = 40; // From CSS: height: 40px
+        const height = 28;
         
         const dpr = window.devicePixelRatio || 1;
         
@@ -1429,10 +1431,12 @@ class FlashbackRecorder {
                 ctx.clearRect(0, 0, width, height);
 
                 // Draw placeholder text (positioned at bottom)
-                ctx.fillStyle = '#9CA3AF';
-                ctx.font = '12px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('Recording in progress...', width / 2, height - 10);
+                if (height >= 36) {
+                    ctx.fillStyle = '#9CA3AF';
+                    ctx.font = '12px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Recording in progress...', width / 2, height - 10);
+                }
             });
             return;
         }
@@ -4825,6 +4829,11 @@ class FlashbackRecorder {
         } else {
             this.shiftBtn.textContent = label;
         }
+        const shiftIcon = label === 'Stop' ? 'stop'
+            : label === 'Pause' ? 'pause'
+                : label === 'Read' ? 'read'
+                    : 'record';
+        this.shiftBtn.dataset.shift = shiftIcon;
         this.shiftBtn.disabled = !!disabled;
     }
 
