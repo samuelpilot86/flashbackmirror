@@ -1,0 +1,16 @@
+Archive des quatre messages du tutoriel de démarrage, retiré de l’app.
+
+Ces textes s’affichaient au premier lancement, un par fenêtre, avec le compteur (1/4) à (4/4). Une case « Never show tutorial again » et les boutons Next puis OK les accompagnaient. Le drapeau enregistré dans le navigateur s’appelait flashbackOnboardingShown.
+
+1. Welcome! Flashback Mirror records continuously to help you easily review yourself and improve (sports, dance, performing arts, public speaking...).
+
+2. Use ← to go back in time (includes video and audio – be careful if in public! 😉).
+
+3. Click on the timeline to review a specific moment.
+
+4. Le quatrième texte dépendait de l’état au moment de l’affichage :
+
+- Recording has started automatically. Happy training!
+- Recording is running. Happy training!
+- Press Record when you are ready to start. Happy training!
+- Once camera and microphone access is allowed, recording starts automatically. Happy training!

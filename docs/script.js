@@ -704,9 +704,7 @@ class FlashbackRecorder {
         this.inactivityWarningShown = false; // Avoid multiple alerts during a session
         this.inactivityEventListeners = []; // Store the listeners for cleanup
 
-        // Onboarding and tooltips (UX-003)
-        this.onboardingCurrentStep = 0; // Current step in onboarding (0-3)
-        this.onboardingModal = null; // Reference to onboarding modal
+        // Contextual tooltips (UX-003)
         this.tooltipElements = new Map(); // Map of element -> tooltip div
 
         // Expose the global instance for easier debugging
@@ -782,9 +780,8 @@ class FlashbackRecorder {
             this.startRecording();
         }
         
-        // Show onboarding tutorial on first launch (UX-003)
-        this.showOnboardingIfFirstTime();
-        
+        try { localStorage.removeItem('flashbackOnboardingShown'); } catch (e) { /* noop */ }
+
         // Initialize contextual tooltips (UX-003)
         this.initContextualTooltips();
     }
@@ -2735,184 +2732,7 @@ class FlashbackRecorder {
         document.body.appendChild(modal);
     }
 
-    // === ONBOARDING AND TOOLTIPS (UX-003) ===
-
-    showOnboardingIfFirstTime() {
-        const onboardingShown = localStorage.getItem('flashbackOnboardingShown') === 'true';
-        if (!onboardingShown) {
-            this.onboardingCurrentStep = 0;
-            this.showOnboardingModal();
-        }
-    }
-
-    showOnboardingModal() {
-        // Remove existing modal if any
-        const existingModal = document.getElementById('onboardingModal');
-        if (existingModal) {
-            existingModal.remove();
-        }
-
-        const modal = document.createElement('div');
-        modal.id = 'onboardingModal';
-        modal.style.position = 'fixed';
-        modal.style.top = '0';
-        modal.style.left = '0';
-        modal.style.width = '100%';
-        modal.style.height = '100%';
-        modal.style.background = 'rgba(0, 0, 0, 0.7)';
-        modal.style.display = 'flex';
-        modal.style.justifyContent = 'center';
-        modal.style.alignItems = 'center';
-        modal.style.zIndex = '10001';
-        modal.style.opacity = '0';
-        modal.style.transition = 'opacity 0.3s ease';
-
-        const steps = [
-            "Welcome! Flashback Mirror records continuously to help you easily review yourself and improve (sports, dance, performing arts, public speaking...).",
-            "Use ← to go back in time (includes video and audio – be careful if in public! 😉).",
-            "Click on the timeline to review a specific moment.",
-            this.getOnboardingLastStepText()
-        ];
-
-        const content = document.createElement('div');
-        content.style.background = 'white';
-        content.style.color = 'black';
-        content.style.padding = '32px';
-        content.style.borderRadius = '12px';
-        content.style.maxWidth = '500px';
-        content.style.textAlign = 'center';
-        content.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.3)';
-        content.style.position = 'relative';
-
-        const stepText = document.createElement('p');
-        stepText.style.fontSize = '16px';
-        stepText.style.lineHeight = '1.6';
-        stepText.style.marginBottom = '24px';
-        stepText.style.minHeight = '60px';
-        stepText.textContent = steps[this.onboardingCurrentStep] + ` (${this.onboardingCurrentStep + 1}/4)`;
-        content.appendChild(stepText);
-
-        const checkboxContainer = document.createElement('div');
-        checkboxContainer.style.marginBottom = '20px';
-        checkboxContainer.style.textAlign = 'left';
-        checkboxContainer.style.display = 'flex';
-        checkboxContainer.style.alignItems = 'center';
-        checkboxContainer.style.justifyContent = 'center';
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.id = 'neverShowOnboarding';
-        checkbox.style.marginRight = '8px';
-        checkboxContainer.appendChild(checkbox);
-
-        const label = document.createElement('label');
-        label.htmlFor = 'neverShowOnboarding';
-        label.textContent = 'Never show tutorial again';
-        label.style.cursor = 'pointer';
-        label.style.fontSize = '14px';
-        checkboxContainer.appendChild(label);
-        content.appendChild(checkboxContainer);
-
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.gap = '12px';
-        buttonContainer.style.justifyContent = 'center';
-
-        if (this.onboardingCurrentStep < 3) {
-            const nextButton = document.createElement('button');
-            nextButton.textContent = 'Next';
-            nextButton.style.background = '#007bff';
-            nextButton.style.color = 'white';
-            nextButton.style.border = 'none';
-            nextButton.style.padding = '10px 24px';
-            nextButton.style.borderRadius = '6px';
-            nextButton.style.cursor = 'pointer';
-            nextButton.style.fontSize = '14px';
-            nextButton.style.fontWeight = '500';
-            nextButton.onclick = () => {
-                this.onboardingCurrentStep++;
-                if (this.onboardingCurrentStep < 4) {
-                    modal.remove();
-                    this.showOnboardingModal();
-                } else {
-                    this.closeOnboardingModal(checkbox.checked);
-                }
-            };
-            buttonContainer.appendChild(nextButton);
-        } else {
-            const okButton = document.createElement('button');
-            okButton.textContent = 'OK';
-            okButton.style.background = '#007bff';
-            okButton.style.color = 'white';
-            okButton.style.border = 'none';
-            okButton.style.padding = '10px 24px';
-            okButton.style.borderRadius = '6px';
-            okButton.style.cursor = 'pointer';
-            okButton.style.fontSize = '14px';
-            okButton.style.fontWeight = '500';
-            okButton.onclick = () => {
-                this.closeOnboardingModal(checkbox.checked);
-            };
-            buttonContainer.appendChild(okButton);
-        }
-
-        content.appendChild(buttonContainer);
-        modal.appendChild(content);
-
-        // Close on outside click
-        modal.onclick = (e) => {
-            if (e.target === modal) {
-                // If clicking outside, don't show remaining steps
-                localStorage.setItem('flashbackOnboardingShown', 'true');
-                modal.remove();
-            }
-        };
-
-        document.body.appendChild(modal);
-        this.onboardingModal = modal;
-
-        // Fade in
-        setTimeout(() => {
-            modal.style.opacity = '1';
-        }, 10);
-    }
-
-    getOnboardingLastStepText() {
-        if (this.state === 'recording') {
-            return this.autoStartRecording
-                ? 'Recording has started automatically. Happy training!'
-                : 'Recording is running. Happy training!';
-        }
-        if (!this.autoStartRecording) {
-            return 'Press Record when you are ready to start. Happy training!';
-        }
-        return 'Once camera and microphone access is allowed, recording starts automatically. Happy training!';
-    }
-
-    refreshOnboardingAfterCaptureChange() {
-        if (!this.onboardingModal || this.onboardingCurrentStep !== 3) {
-            return;
-        }
-        const stepText = this.onboardingModal.querySelector('p');
-        if (stepText) {
-            stepText.textContent = this.getOnboardingLastStepText() + ' (4/4)';
-        }
-    }
-
-    closeOnboardingModal(neverShowAgain) {
-        if (this.onboardingModal) {
-            this.onboardingModal.style.opacity = '0';
-            setTimeout(() => {
-                if (this.onboardingModal && this.onboardingModal.parentNode) {
-                    this.onboardingModal.remove();
-                }
-                this.onboardingModal = null;
-            }, 300);
-        }
-        if (neverShowAgain) {
-            localStorage.setItem('flashbackOnboardingShown', 'true');
-        }
-    }
+    // === CONTEXTUAL TOOLTIPS (UX-003) ===
 
     initContextualTooltips() {
         // Timeline tooltip
@@ -3303,7 +3123,6 @@ class FlashbackRecorder {
         this.setState('recordingStopped');
         this.updateUIForRecordingStopped();
         this.showCaptureStartPanel(this.getCaptureStartFailureCopy(kind, permissionHint));
-        this.refreshOnboardingAfterCaptureChange();
     }
 
     async retryCaptureStart() {
@@ -3559,7 +3378,6 @@ class FlashbackRecorder {
             // Start inactivity monitoring (BUG-021)
             this.startInactivityMonitor();
             this.hideCaptureStartPanel();
-            this.refreshOnboardingAfterCaptureChange();
         } catch (err) {
             await this.handleCaptureStartFailure(err);
         }
@@ -5680,6 +5498,65 @@ class FlashbackRecorder {
         return this._html2canvasLoader;
     }
 
+    paintPrivacyBlur(video, width, height) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(2, Math.round(width) || 2);
+        canvas.height = Math.max(2, Math.round(height) || 2);
+        const ctx = canvas.getContext('2d');
+        const cw = canvas.width;
+        const ch = canvas.height;
+        ctx.fillStyle = '#1E293B';
+        ctx.fillRect(0, 0, cw, ch);
+        const vw = video.videoWidth || cw;
+        const vh = video.videoHeight || ch;
+        if (!vw || !vh) return canvas;
+        const fit = Math.min(cw / vw, ch / vh);
+        const dw = vw * fit;
+        const dh = vh * fit;
+        const dx = (cw - dw) / 2;
+        const dy = (ch - dh) / 2;
+        try {
+            const longSide = 16;
+            const tw = vw >= vh ? longSide : Math.max(2, Math.round(longSide * vw / vh));
+            const th = vh > vw ? longSide : Math.max(2, Math.round(longSide * vh / vw));
+            const tiny = document.createElement('canvas');
+            tiny.width = tw;
+            tiny.height = th;
+            const tctx = tiny.getContext('2d');
+            const mirrored = !!(video.style.transform && video.style.transform.indexOf('scaleX(-1)') !== -1);
+            if (mirrored) {
+                tctx.translate(tw, 0);
+                tctx.scale(-1, 1);
+            }
+            tctx.drawImage(video, 0, 0, tw, th);
+
+            const sharp = document.createElement('canvas');
+            sharp.width = cw;
+            sharp.height = ch;
+            const sctx = sharp.getContext('2d');
+            sctx.imageSmoothingEnabled = true;
+            sctx.drawImage(tiny, dx, dy, dw, dh);
+
+            const radius = Math.max(18, Math.round(Math.min(dw, dh) / 10));
+            const blurPass = (src) => {
+                const out = document.createElement('canvas');
+                out.width = cw;
+                out.height = ch;
+                const octx = out.getContext('2d');
+                octx.filter = 'blur(' + radius + 'px)';
+                octx.drawImage(src, 0, 0);
+                return out;
+            };
+            ctx.drawImage(blurPass(blurPass(sharp)), 0, 0);
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.2)';
+            ctx.fillRect(dx, dy, dw, dh);
+        } catch (e) {
+            ctx.fillStyle = '#1E293B';
+            ctx.fillRect(0, 0, cw, ch);
+        }
+        return canvas;
+    }
+
     coverVideosForScreenshot() {
         const restorers = [];
         document.querySelectorAll('video').forEach(video => {
@@ -5689,30 +5566,14 @@ class FlashbackRecorder {
             if (getComputedStyle(parent).position === 'static') {
                 parent.style.position = 'relative';
             }
-            const overlay = document.createElement('canvas');
+            const box = video.getBoundingClientRect();
+            const overlay = this.paintPrivacyBlur(
+                video,
+                Math.max(16, box.width || video.clientWidth || 320),
+                Math.max(9, box.height || video.clientHeight || 180)
+            );
             overlay.setAttribute('data-bug-report-blur', '1');
             overlay.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;';
-            const width = Math.max(16, video.videoWidth || video.clientWidth || 320);
-            const height = Math.max(9, video.videoHeight || video.clientHeight || 180);
-            overlay.width = width;
-            overlay.height = height;
-            const tiny = document.createElement('canvas');
-            tiny.width = 10;
-            tiny.height = Math.max(4, Math.round(10 * height / width));
-            try {
-                tiny.getContext('2d').drawImage(video, 0, 0, tiny.width, tiny.height);
-                const ctx = overlay.getContext('2d');
-                ctx.imageSmoothingEnabled = true;
-                ctx.filter = 'blur(32px)';
-                ctx.drawImage(tiny, 0, 0, width, height);
-                ctx.filter = 'none';
-                ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
-                ctx.fillRect(0, 0, width, height);
-            } catch (e) {
-                const ctx = overlay.getContext('2d');
-                ctx.fillStyle = '#1E293B';
-                ctx.fillRect(0, 0, width, height);
-            }
             const prevVisibility = video.style.visibility;
             video.style.visibility = 'hidden';
             parent.appendChild(overlay);
@@ -5770,16 +5631,12 @@ class FlashbackRecorder {
             } catch (e) {
                 const video = this.videoPreview;
                 if (video && (video.videoWidth || video.clientWidth)) {
-                    const fallback = document.createElement('canvas');
-                    fallback.width = video.videoWidth || 640;
-                    fallback.height = video.videoHeight || 360;
-                    const tiny = document.createElement('canvas');
-                    tiny.width = 10;
-                    tiny.height = 6;
-                    tiny.getContext('2d').drawImage(video, 0, 0, 10, 6);
-                    const ctx = fallback.getContext('2d');
-                    ctx.filter = 'blur(32px)';
-                    ctx.drawImage(tiny, 0, 0, fallback.width, fallback.height);
+                    const box = video.getBoundingClientRect();
+                    const fallback = this.paintPrivacyBlur(
+                        video,
+                        Math.max(16, box.width || video.videoWidth || 640),
+                        Math.max(9, box.height || video.videoHeight || 360)
+                    );
                     return this.canvasToJpegDataUrl(fallback);
                 }
                 return null;
@@ -6252,42 +6109,36 @@ class FlashbackRecorder {
 
     async _playFlashbackViaObjectUrl(session, timestamp, fbId) {
         const absStart = session.absoluteStart ?? session.visibleStartAbs ?? 0;
-        // Reuse the already-loaded file: comparing video.src to the object URL is unreliable
-        // (Firefox rewrites it), and rebuilding + load() on every click costs several seconds.
+        // A second click in the same segment reloads that file instead of seeking it in place.
+        // Firefox freezes the picture if currentTime moves inside a playing MediaRecorder WebM.
         const sameBlob = !!this._blobPlaybackUrl
             && this._blobPlaybackSessionId === session.id
             && this.flashbackVideo;
-        if (sameBlob) {
-            try {
-                this.flashbackVideo.currentTime = Math.max(0, timestamp - absStart);
-            } catch (e) { /* seek best-effort */ }
-            this._syncFlashbackIndex(timestamp);
-            this._attachFlashbackHandlers(fbId);
-            this.setState('flashback');
-            this.updateUIForFlashback();
-            this.updateDebugPanel();
-            this.startTimer();
-            const tryPlaySame = () => this.flashbackVideo && this.flashbackVideo.play();
-            Promise.resolve().then(tryPlaySame).catch(() => {});
-            this.dlog('flashback:blob-seek', this._mseVideoSnap({ absStart: Number(absStart.toFixed(2)) }));
-            return true;
-        }
+        if (!sameBlob) {
+            const blob = this.buildFlashbackSessionBlob(session);
+            if (!blob || blob.size === 0) {
+                this.dlog('flashback:blob-play-fail', { reason: 'empty-blob' });
+                return false;
+            }
 
-        const blob = this.buildFlashbackSessionBlob(session);
-        if (!blob || blob.size === 0) {
-            this.dlog('flashback:blob-play-fail', { reason: 'empty-blob' });
-            return false;
+            this.clearFlashbackMonitors();
+            this._teardownMse();
+            this._mse = null;
+            if (this._blobPlaybackUrl) {
+                try { URL.revokeObjectURL(this._blobPlaybackUrl); } catch (e) { /* noop */ }
+            }
+            this._blobPlaybackUrl = URL.createObjectURL(blob);
+            this._blobPlaybackAbsStart = absStart;
+            this._blobPlaybackSessionId = session.id;
+        } else {
+            // Seeking a MediaRecorder WebM that is already playing freezes the picture in
+            // Firefox until the next keyframe (often the next segment). Reloading the same
+            // file makes the decoder start from the keyframe, then we seek before play.
+            this._detachFlashbackHandlers();
+            try { this.flashbackVideo.pause(); } catch (e) { /* noop */ }
+            this.flashbackVideo.removeAttribute('src');
+            try { this.flashbackVideo.load(); } catch (e) { /* noop */ }
         }
-
-        this.clearFlashbackMonitors();
-        this._teardownMse();
-        this._mse = null;
-        if (this._blobPlaybackUrl) {
-            try { URL.revokeObjectURL(this._blobPlaybackUrl); } catch (e) { /* noop */ }
-        }
-        this._blobPlaybackUrl = URL.createObjectURL(blob);
-        this._blobPlaybackAbsStart = absStart;
-        this._blobPlaybackSessionId = session.id;
         this.flashbackVideo = this.videoPreview;
         const video = this.videoPreview;
         video.srcObject = null;
@@ -6324,14 +6175,33 @@ class FlashbackRecorder {
             duration: Number.isFinite(duration) ? Number(duration.toFixed(2)) : duration,
             sessionDuration: Number((session.duration || 0).toFixed(2)),
             absStart: Number(absStart.toFixed(2)),
-            sizeKB: Math.round(blob.size / 1024),
+            sizeKB: sameBlob ? undefined : Math.round(blob.size / 1024),
             waitedMs: Date.now() - loadStarted,
-            mime: blob.type || this.activeMimeType
+            reload: sameBlob,
+            mime: (sameBlob ? this.activeMimeType : blob.type) || this.activeMimeType
         });
 
-        try {
-            video.currentTime = Math.max(0, timestamp - absStart);
-        } catch (e) { /* seek best-effort */ }
+        const localTime = Math.max(0, timestamp - absStart);
+        if (localTime > 0.05) {
+            const seeked = new Promise((resolve) => {
+                let settled = false;
+                const done = () => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timeout);
+                    video.removeEventListener('seeked', done);
+                    resolve();
+                };
+                const timeout = setTimeout(done, 400);
+                video.addEventListener('seeked', done);
+            });
+            try { video.currentTime = localTime; } catch (e) { /* seek best-effort */ }
+            await seeked;
+        }
+        if (this._flashbackId !== fbId) {
+            return true;
+        }
+        this._lastMseTimeLog = null;
 
         this._syncFlashbackIndex(timestamp);
         this._attachFlashbackHandlers(fbId);
@@ -6882,7 +6752,6 @@ class FlashbackRecorder {
             this.configAutoStartToggle.addEventListener('change', () => {
                 this.autoStartRecording = this.configAutoStartToggle.checked;
                 this.saveSettings();
-                this.refreshOnboardingAfterCaptureChange();
             });
         }
 

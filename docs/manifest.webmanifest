@@ -1,0 +1,8 @@
+{
+  "name": "Flashback",
+  "short_name": "Flashback",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#1E293B",
+  "theme_color": "#1E293B"
+}
