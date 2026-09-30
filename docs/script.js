@@ -2750,37 +2750,52 @@ class FlashbackRecorder {
             this.addTooltip(this.waveformCanvas, 'Click to jump to a specific moment.');
         }
 
+        // Record / stop / pause / resume — same key, label follows the current action
+        if (this.shiftBtn) {
+            const labelEl = this.shiftBtn.querySelector('.btn-label');
+            this.addTooltip(this.shiftBtn, this.shiftButtonTooltip(labelEl ? labelEl.textContent : 'Record'));
+        }
+
         // Navigation buttons tooltips
         if (this.flashbackBtn) {
-            this.addTooltip(this.flashbackBtn, 'Go back in time (quick repeated presses increase the distance).');
+            this.addTooltip(this.flashbackBtn, 'Go back in time (quick repeated presses increase the distance).\nShortcut: ←');
         }
         if (this.forwardBtn) {
-            this.addTooltip(this.forwardBtn, 'Go forward in time (quick repeated presses increase the distance).');
+            this.addTooltip(this.forwardBtn, 'Go forward in time (quick repeated presses increase the distance).\nShortcut: →');
         }
 
         // Marker buttons tooltips
         if (this.addMarkerBtn) {
-            this.addTooltip(this.addMarkerBtn, 'Create a marker. Navigate to previous/next marker with the Up/Down buttons.');
+            this.addTooltip(this.addMarkerBtn, 'Create a marker. Navigate to previous/next marker with ↑ and ↓.\nShortcut: Shift');
         }
         if (this.prevMarkerBtn) {
-            this.addTooltip(this.prevMarkerBtn, 'Navigate to previous marker.');
+            this.addTooltip(this.prevMarkerBtn, 'Navigate to previous marker.\nShortcut: ↑');
         }
         if (this.nextMarkerBtn) {
-            this.addTooltip(this.nextMarkerBtn, 'Navigate to next marker.');
+            this.addTooltip(this.nextMarkerBtn, 'Navigate to next marker.\nShortcut: ↓');
         }
+    }
+
+    shiftButtonTooltip(label) {
+        const action = label === 'Stop' ? 'Stop recording.'
+            : label === 'Pause' ? 'Pause the flashback.'
+                : label === 'Read' ? 'Resume the flashback.'
+                    : 'Start recording.';
+        return action + '\nShortcut: Space';
     }
 
     addTooltip(element, text) {
         if (!element || !text) return;
 
-        let tooltip = null;
+        const state = { text, node: null };
 
-        const showTooltip = (e) => {
-            if (tooltip) return; // Already showing
+        const showTooltip = () => {
+            if (state.node) return; // Already showing
 
-            tooltip = document.createElement('div');
+            const tooltip = document.createElement('div');
+            state.node = tooltip;
             tooltip.className = 'contextual-tooltip';
-            tooltip.textContent = text;
+            tooltip.textContent = state.text;
             tooltip.style.position = 'absolute';
             tooltip.style.background = 'rgba(0, 0, 0, 0.85)';
             tooltip.style.color = 'white';
@@ -2789,9 +2804,8 @@ class FlashbackRecorder {
             tooltip.style.fontSize = '13px';
             tooltip.style.zIndex = '10000';
             tooltip.style.pointerEvents = 'none';
-            tooltip.style.whiteSpace = 'nowrap';
             tooltip.style.maxWidth = '250px';
-            tooltip.style.whiteSpace = 'normal';
+            tooltip.style.whiteSpace = 'pre-line';
             tooltip.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
 
             document.body.appendChild(tooltip);
@@ -2822,18 +2836,19 @@ class FlashbackRecorder {
             tooltip.style.opacity = '0';
             tooltip.style.transition = 'opacity 0.2s ease';
             setTimeout(() => {
-                if (tooltip) tooltip.style.opacity = '1';
+                if (state.node) state.node.style.opacity = '1';
             }, 10);
         };
 
         const hideTooltip = () => {
+            const tooltip = state.node;
             if (tooltip) {
                 tooltip.style.opacity = '0';
                 setTimeout(() => {
-                    if (tooltip && tooltip.parentNode) {
+                    if (state.node === tooltip && tooltip.parentNode) {
                         tooltip.remove();
+                        state.node = null;
                     }
-                    tooltip = null;
                 }, 200);
             }
         };
@@ -2842,7 +2857,14 @@ class FlashbackRecorder {
         element.addEventListener('mouseleave', hideTooltip);
         element.addEventListener('click', hideTooltip);
 
-        this.tooltipElements.set(element, { showTooltip, hideTooltip, tooltip });
+        this.tooltipElements.set(element, state);
+    }
+
+    setTooltipText(element, text) {
+        const state = element && this.tooltipElements.get(element);
+        if (!state || !text) return;
+        state.text = text;
+        if (state.node) state.node.textContent = text;
     }
 
     showFirstFlashbackOverlay() {
@@ -4657,6 +4679,7 @@ class FlashbackRecorder {
                     : 'record';
         this.shiftBtn.dataset.shift = shiftIcon;
         this.shiftBtn.disabled = !!disabled;
+        this.setTooltipText(this.shiftBtn, this.shiftButtonTooltip(label));
     }
 
     updateStateIndicator(state) {
